@@ -35,6 +35,26 @@ blockquote { color:#5c6878; border-left:4px solid #dfe4ea; margin:8px 0; padding
 """
 
 
+PAGE_NAMES = {
+    "daily": "每日精華",
+    "tw": "台股籌碼",
+    "earnings": "SP500財報時間表",
+    "week_review": "本週市場結論",
+    "week_outlook": "下週前瞻",
+}
+
+
+def attachment_name(path):
+    """1_daily.png → 2026-11-03_1_每日精華.png，方便下載後辨識。"""
+    import datetime as dt
+    from zoneinfo import ZoneInfo
+
+    stem = os.path.splitext(os.path.basename(path))[0]
+    idx, _, key = stem.partition("_")
+    today = dt.datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d")
+    return f"{today}_{idx}_{PAGE_NAMES.get(key, key)}.png"
+
+
 def send_resend(subject, html, text, images):
     """透過 Resend HTTPS API 寄信（雲端環境擋 SMTP 時使用）。
 
@@ -50,14 +70,12 @@ def send_resend(subject, html, text, images):
     attachments = []
     for i, p in enumerate(images):
         with open(p, "rb") as f:
-            attachments.append(
-                {
-                    "filename": os.path.basename(p),
-                    "content": base64.b64encode(f.read()).decode(),
-                    "content_type": "image/png",
-                    "content_id": f"img{i}",
-                }
-            )
+            b64 = base64.b64encode(f.read()).decode()
+        name = attachment_name(p)
+        # 內文顯示用（inline）
+        attachments.append({"filename": f"inline_{name}", "content": b64, "content_type": "image/png", "content_id": f"img{i}"})
+        # 一般附件：可以點開放大、下載
+        attachments.append({"filename": name, "content": b64, "content_type": "image/png"})
     r = requests.post(
         "https://api.resend.com/emails",
         headers={"Authorization": f"Bearer {os.environ['RESEND_API_KEY']}", "Content-Type": "application/json"},
@@ -85,6 +103,8 @@ def main():
             images = [p for p in json.load(f) if os.path.exists(p)]
 
     img_tags = "".join(f'<img class="brief" src="cid:img{i}" alt="晨報圖片 {i + 1}">' for i in range(len(images)))
+    if images:
+        img_tags = "<p class='note' style='margin-top:0'>💡 想放大或下載圖片，請點信件最下方的附件。</p>" + img_tags
     body = markdown.markdown(report_md, extensions=["tables", "sane_lists"])
     html = (
         f"<html><head><meta charset='utf-8'><style>{STYLE}</style></head><body>"
