@@ -31,7 +31,8 @@ python scripts/fetch_earnings.py --week next
 python scripts/fetch_tw.py
 ```
 
-- `data/tw.json`：加權指數、三大法人、外資個股買賣超、台指期未平倉、融資券增減、「再跌一根維持率破 130%」個股（估算）、00981A／00992A 持股變化。
+- `data/tw.json`：加權指數、**台指期夜盤**（`tx_night.night`，期交所官方數字，不用再上網搜尋）、三大法人、外資個股買賣超、台指期未平倉、融資券增減、「再跌一根維持率破 130%」個股（估算）、00981A／00992A 持股變化。
+- `tw.json` 的 `errors` 有項目時（例如投信網站連線中斷），重跑一次 `python scripts/fetch_tw.py`；還是失敗就照常產圖，圖上會自動標示抓取失敗。
 
 - `data/market.json`：指數、ETF、個股、匯率、商品、VIX、美債殖利率（FRED，會晚 1～2 天）、淨流動性、CNN 恐懼貪婪。
 - `data/earnings.json`：該週全部 S&P 500 成分股財報，含盤前／盤後與台灣時間。

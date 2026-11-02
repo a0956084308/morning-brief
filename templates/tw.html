@@ -7,7 +7,7 @@
 {% block title %}台股籌碼 {{ t.label }}{% endblock %}
 {% block head %}
 <style>
-  .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 8px; }
+  .kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-top: 8px; }
   .kpi { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
   .kpi .t { font-size: 14px; color: var(--muted); font-weight: 700; }
   .kpi .v { font-size: 24px; }
@@ -39,6 +39,8 @@
     <div class="kpis">
       {% set ix = t.index or {} %}
       <div class="kpi"><div class="t">加權指數</div><div class="v num">{{ ix.close|fmt(2) }}</div><div class="s">{{ lots(ix.chg|round(2) if ix.chg is not none else none) }} 點 {{ chg(ix.chg_pct) }}</div></div>
+      {% set nt = (t.tx_night or {}).night or {} %}
+      <div class="kpi"><div class="t">台指期夜盤 <span style="font-weight:400">{{ nt.month[4:] ~ '月' if nt.month }}</span></div><div class="v num">{{ nt.get('close')|fmt(0) }}</div><div class="s">{{ lots(nt.get('chg')|int if nt.get('chg') is not none else none) }} 點 {{ chg(nt.get('chg_pct')) }}</div></div>
       <div class="kpi"><div class="t">成交金額</div><div class="v num">{{ "{:,}".format(ix.turnover_e8 or 0) }}</div><div class="s">億元</div></div>
       {% set tot = (inst.summary or [])|selectattr('name','equalto','合計')|first %}
       <div class="kpi"><div class="t">三大法人合計</div><div class="v">{{ amt(tot.net / 1e8 if tot else none) }}</div><div class="s">億元</div></div>
@@ -121,11 +123,11 @@
 </div>
 
 <div class="grid" style="grid-template-columns: 1fr 1fr; margin-top:16px">
-  {% for key in ['etf_00981A', 'etf_00992A'] %}{% set e = t.get(key) or {} %}
+  {% for key, title in [('etf_00981A', '00981A 主動統一台股增長'), ('etf_00992A', '00992A 主動群益科技創新')] %}{% set e = t.get(key) or {} %}
   <div class="panel">
-    <h2>{{ e.code }} {{ e.name }}　持股變化</h2>
+    <h2>{{ title }}　持股變化</h2>
     <div class="body">
-      {% if e.error %}<div class="warn">{{ e.error }}</div>{% else %}
+      {% if e.error or not e.date %}<div class="warn">持股資料抓取失敗：{{ e.error or (t.errors or {}).get(key, '未知原因') }}</div>{% else %}
       <div class="etf-sum"><span>比對 <b>{{ e.date_prev[5:].replace('-','/') }} → {{ e.date[5:].replace('-','/') }}</b></span><span>持股 <b>{{ e.holdings }}</b> 檔</span><span>變動 <b>{{ e.changes|length }}</b> 檔</span><span>增減 ≥100 張 <b class="hot">{{ e.big|length }}</b> 檔</span></div>
       {% if e.big %}
       <div class="bigbox"><div class="h">★ 增減 100 張以上</div>

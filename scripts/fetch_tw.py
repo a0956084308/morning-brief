@@ -239,7 +239,7 @@ def taifex_oi(d):
         data={"queryStartDate": start.strftime("%Y/%m/%d"), "queryEndDate": d.strftime("%Y/%m/%d"), "commodityId": "TXF"},
         timeout=40,
     )
-    df = pd.read_csv(io.StringIO(r.content.decode("big5", errors="replace")))
+    df = pd.read_csv(io.StringIO(r.content.decode("big5", errors="replace")), index_col=False)
     df.columns = [c.strip() for c in df.columns]
     out = {}
     for who, key in (("外資及陸資", "foreign"), ("投信", "trust"), ("自營商", "dealer")):
@@ -257,25 +257,71 @@ def taifex_oi(d):
     return out
 
 
+def taifex_night():
+    """台指期近月夜盤（期交所標記為「盤後」，歸屬下一個交易日）。"""
+    today = dt.datetime.now(TW).date()
+    df = None
+    for back in range(5):  # 結束日期還沒有資料時，期交所會回錯誤頁，往前找
+        end = today - dt.timedelta(days=back)
+        r = S.post(
+            "https://www.taifex.com.tw/cht/3/futDataDown",
+            data={"down_type": "1", "commodity_id": "TX", "queryStartDate": (end - dt.timedelta(days=10)).strftime("%Y/%m/%d"), "queryEndDate": end.strftime("%Y/%m/%d")},
+            timeout=40,
+        )
+        text = r.content.decode("big5", errors="replace")
+        if text.startswith("交易日期"):
+            # 每行結尾多一個逗號，index_col=False 避免欄位錯位
+            df = pd.read_csv(io.StringIO(text), dtype=str, index_col=False).fillna("")
+            break
+        time.sleep(1)
+    if df is None:
+        raise RuntimeError("期交所沒有回傳期貨行情")
+    df.columns = [c.strip() for c in df.columns]
+    df = df.apply(lambda s: s.str.strip())
+    df = df[(df["契約"] == "TX") & df["到期月份(週別)"].str.fullmatch(r"\d{6}")]
+    out = {}
+    for session, key in (("盤後", "night"), ("一般", "day")):
+        s = df[df["交易時段"] == session]
+        if not len(s):
+            continue
+        last_date = s["交易日期"].max()
+        row = s[s["交易日期"] == last_date].sort_values("到期月份(週別)").iloc[0]
+        out[key] = {
+            "trade_date": last_date,
+            "month": row["到期月份(週別)"],
+            "close": num(row["收盤價"]),
+            "chg": num(row["漲跌價"]),
+            "chg_pct": num(row["漲跌%"].replace("%", "")),
+            "volume": num(row["成交量"]),
+        }
+    return out
+
+
 # ---------- 主動式 ETF ----------
 def etf_00981a():
     """統一投信 ezmoney：GetPCF 可依「公告日（民國年）」查詢，回傳前一交易日持股。"""
     sess = requests.Session()
     sess.headers["User-Agent"] = UA
-    sess.get("https://www.ezmoney.com.tw/ETF/Transaction/PCF?fundCode=49YTW", timeout=40)
+
+    def call(method, url, **kw):
+        # 投信網站偶爾會中斷連線（Connection reset），重試幾次
+        for attempt in range(4):
+            try:
+                return getattr(sess, method)(url, timeout=40, **kw)
+            except requests.RequestException:
+                time.sleep(3 * (attempt + 1))
+        return None
+
+    call("get", "https://www.ezmoney.com.tw/ETF/Transaction/PCF?fundCode=49YTW")
     snaps = {}
     d = dt.datetime.now(TW).date() + dt.timedelta(days=1)
     for _ in range(12):
         if len(snaps) >= 2:
             break
+        r = call("post", "https://www.ezmoney.com.tw/ETF/Transaction/GetPCF", json={"fundCode": "49YTW", "date": roc(d), "specificDate": True})
         try:
-            r = sess.post(
-                "https://www.ezmoney.com.tw/ETF/Transaction/GetPCF",
-                json={"fundCode": "49YTW", "date": roc(d), "specificDate": True},
-                timeout=40,
-            )
-            j = r.json()
-        except (requests.RequestException, ValueError):
+            j = r.json() if r is not None else {}
+        except ValueError:
             j = {}
         for a in j.get("asset") or []:
             if a.get("AssetCode") == "ST" and a.get("Details"):
@@ -388,6 +434,7 @@ def main():
     step("margin_movers", margin_movers)
     step("institutional", lambda: institutional(d, last_close))
     step("futures", lambda: taifex_oi(d))
+    step("tx_night", taifex_night)
     step("maintenance", lambda: maintenance_risk(hist, last_close))
     step("etf_00981A", lambda: etf_diff("00981A", "主動統一台股增長", etf_00981a(), names))
     step("etf_00992A", lambda: etf_diff("00992A", "主動群益科技創新", etf_00992a(), names))
