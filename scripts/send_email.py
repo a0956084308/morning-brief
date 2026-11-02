@@ -1,0 +1,99 @@
+"""寄出晨報：圖片嵌在信件內文，下方接完整晨報（Markdown 轉 HTML）。
+
+需要環境變數：
+  GMAIL_USER          寄件 Gmail 帳號
+  GMAIL_APP_PASSWORD  Gmail 應用程式密碼（16 碼）
+  MAIL_TO             收件人，可省略（預設寄給 GMAIL_USER），多人用逗號分隔
+
+用法：
+  python scripts/send_email.py --subject "國際財經晨報 11/03（週二）" --report out/report.md
+  python scripts/send_email.py ... --dry-run   # 只產生 out/email.html 預覽，不寄出
+"""
+import argparse
+import json
+import os
+import smtplib
+import sys
+from email.mime.image import MIMEImage
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
+import markdown
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+OUT = os.path.join(ROOT, "out")
+
+STYLE = """
+body { font-family: 'Noto Sans TC','Microsoft JhengHei',sans-serif; color:#1b2430; line-height:1.6; max-width:1000px; margin:0 auto; padding:12px; }
+img.brief { width:100%; max-width:1000px; border-radius:8px; margin:0 0 14px; border:1px solid #dfe4ea; }
+h1 { font-size:24px; } h2,h3 { font-size:19px; border-left:5px solid #c8102e; padding-left:8px; margin-top:24px; }
+table { border-collapse:collapse; width:100%; font-size:14px; margin:8px 0; }
+th,td { border:1px solid #dfe4ea; padding:6px 8px; text-align:left; vertical-align:top; }
+th { background:#f3f5f8; }
+blockquote { color:#5c6878; border-left:4px solid #dfe4ea; margin:8px 0; padding-left:10px; }
+.note { color:#5c6878; font-size:12px; margin-top:24px; }
+"""
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--subject", required=True)
+    ap.add_argument("--report", default=os.path.join(OUT, "report.md"))
+    ap.add_argument("--images", default=os.path.join(OUT, "images.json"), help="render.py 輸出的圖片清單")
+    ap.add_argument("--dry-run", action="store_true")
+    args = ap.parse_args()
+
+    with open(args.report, encoding="utf-8") as f:
+        report_md = f.read()
+    images = []
+    if os.path.exists(args.images):
+        with open(args.images, encoding="utf-8") as f:
+            images = [p for p in json.load(f) if os.path.exists(p)]
+
+    img_tags = "".join(f'<img class="brief" src="cid:img{i}" alt="晨報圖片 {i + 1}">' for i in range(len(images)))
+    body = markdown.markdown(report_md, extensions=["tables", "sane_lists"])
+    html = (
+        f"<html><head><meta charset='utf-8'><style>{STYLE}</style></head><body>"
+        f"{img_tags}{body}"
+        "<p class='note'>本信由自動排程產生，內容僅供參考，不構成投資建議。</p></body></html>"
+    )
+
+    if args.dry_run:
+        preview = html
+        for i, p in enumerate(images):
+            preview = preview.replace(f"cid:img{i}", "file:///" + p.replace("\\", "/").lstrip("/"))
+        path = os.path.join(OUT, "email.html")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(preview)
+        print(f"預覽已寫入 {path}（未寄出）")
+        return
+
+    user = os.environ.get("GMAIL_USER")
+    pw = (os.environ.get("GMAIL_APP_PASSWORD") or "").replace(" ", "")
+    if not user or not pw:
+        sys.exit("缺少環境變數 GMAIL_USER 或 GMAIL_APP_PASSWORD，請到雲端環境設定填入")
+    to = [x.strip() for x in (os.environ.get("MAIL_TO") or user).split(",") if x.strip()]
+
+    msg = MIMEMultipart("related")
+    msg["Subject"] = args.subject
+    msg["From"] = f"國際財經晨報 <{user}>"
+    msg["To"] = ", ".join(to)
+    alt = MIMEMultipart("alternative")
+    alt.attach(MIMEText(report_md, "plain", "utf-8"))
+    alt.attach(MIMEText(html, "html", "utf-8"))
+    msg.attach(alt)
+    for i, p in enumerate(images):
+        with open(p, "rb") as f:
+            part = MIMEImage(f.read(), _subtype="png")
+        part.add_header("Content-ID", f"<img{i}>")
+        part.add_header("Content-Disposition", "inline", filename=os.path.basename(p))
+        msg.attach(part)
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=60) as s:
+        s.login(user, pw)
+        s.send_message(msg)
+    print(f"已寄出：{args.subject} → {', '.join(to)}（圖片 {len(images)} 張）")
+
+
+if __name__ == "__main__":
+    main()

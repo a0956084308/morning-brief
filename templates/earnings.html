@@ -1,0 +1,73 @@
+{% extends "_base.html" %}
+{% block title %}S&P 500 財報時間表 {{ e.title }}{% endblock %}
+{% block head %}
+<style>
+  .ehead { display: flex; align-items: center; justify-content: space-between; background: var(--panel); border-radius: 14px; padding: 16px 22px; margin-bottom: 14px; }
+  .ehead h1 { font-size: 34px; font-weight: 900; }
+  .legend { display: flex; gap: 14px; font-size: 16px; align-items: center; flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 18px; height: 18px; border-radius: 4px; vertical-align: -3px; margin-right: 5px; }
+  .cols { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; align-items: start; }
+  .day h2 { font-size: 21px; }
+  .day h2 small { font-weight: 400; font-size: 15px; opacity: .8; }
+  .sess { padding: 8px 8px 4px; }
+  .sess + .sess { border-top: 2px solid var(--line); }
+  .sess-h { display: flex; justify-content: space-between; align-items: baseline; font-weight: 700; font-size: 16px; margin-bottom: 6px; }
+  .sess-h .tw { font-size: 13px; color: var(--muted); font-weight: 500; }
+  .chip { display: flex; align-items: center; gap: 7px; padding: 4px 6px; border-radius: 8px; border: 1px solid var(--line); margin-bottom: 5px; background: #fff; }
+  .chip.tech { background: var(--tech-bg); border-color: var(--tech-line); }
+  .chip.semi { background: var(--semi-bg); border-color: var(--semi-line); }
+  .logo { width: 28px; height: 28px; flex: none; border-radius: 6px; background: #f3f5f8; display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 12px; font-weight: 700; color: var(--muted); }
+  .logo img { width: 28px; height: 28px; object-fit: contain; }
+  .chip .sym { font-family: "Roboto Mono", monospace; font-weight: 700; font-size: 15px; }
+  .chip .nm { font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chip .txt { min-width: 0; flex: 1; line-height: 1.2; }
+  .tag { font-size: 11px; font-weight: 700; color: #fff; border-radius: 4px; padding: 1px 5px; flex: none; }
+  .tag.t { background: var(--tech-line); }
+  .tag.s { background: var(--semi-line); }
+  .done { font-size: 14px; flex: none; }
+  .empty { font-size: 14px; color: var(--muted); padding: 2px 0 8px; }
+</style>
+{% endblock %}
+{% block body %}
+<div class="ehead">
+  <h1>{{ week_label }} S&P 500 財報時間表　<span class="num">{{ e.title }}</span></h1>
+  <div class="legend">
+    <span>共 <b class="num">{{ e.total }}</b> 家｜科技 <b class="num">{{ e.tech_total }}</b> 家</span>
+    <span><i style="background:var(--tech-bg);border:1px solid var(--tech-line)"></i>科技（資訊科技／通訊服務）</span>
+    <span><i style="background:var(--semi-bg);border:1px solid var(--semi-line)"></i>半導體</span>
+    <span>✅ 已公布</span>
+  </div>
+</div>
+
+{% macro chip(x) -%}
+<div class="chip {{ 'semi' if x.is_semi else ('tech' if x.is_tech else '') }}">
+  <div class="logo"><img src="{{ x.logo }}" alt="" onerror="this.parentNode.textContent='{{ x.symbol[:2] }}'"></div>
+  <div class="txt"><div class="sym">{{ x.symbol }}</div><div class="nm">{{ x.name }}</div></div>
+  {% if x.is_semi %}<span class="tag s">半導體</span>{% elif x.is_tech %}<span class="tag t">科技</span>{% endif %}
+  {% if x.reported %}<span class="done">✅</span>{% endif %}
+</div>
+{%- endmacro %}
+
+<div class="cols">
+  {% for d in e.days %}
+  <div class="panel day">
+    <h2>{{ d.label }} <small>{{ d.count }} 家</small></h2>
+    <div class="sess">
+      <div class="sess-h"><span>☀ 盤前 BMO</span><span class="tw">台灣 {{ d.bmo_tw }}</span></div>
+      {% for x in d.bmo %}{{ chip(x) }}{% else %}<div class="empty">無</div>{% endfor %}
+    </div>
+    <div class="sess">
+      <div class="sess-h"><span>☾ 盤後 AMC</span><span class="tw">台灣 {{ d.amc_tw }}</span></div>
+      {% for x in d.amc %}{{ chip(x) }}{% else %}<div class="empty">無</div>{% endfor %}
+    </div>
+    {% if d.tbd %}
+    <div class="sess">
+      <div class="sess-h"><span>時間未定</span></div>
+      {% for x in d.tbd %}{{ chip(x) }}{% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% if e.errors %}<div class="small warn" style="margin-top:8px">部分日期資料抓取失敗：{{ e.errors|join('、') }}</div>{% endif %}
+{% endblock %}

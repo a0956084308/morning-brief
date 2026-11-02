@@ -1,0 +1,103 @@
+{% extends "_base.html" %}
+{% from "_macros.html" import chg, tile %}
+{% block title %}國際財經晨報 {{ c.date }}{% endblock %}
+{% block body %}
+<div class="head">
+  <div class="badge"><b>晨報</b><span>{{ c.date[5:].replace('-', '/') }}</span></div>
+  <div class="head-main">
+    <h1>{{ c.date }}（{{ c.weekday }}）國際財經晨報 {% if c.mood %}<span class="mood">{{ c.mood }}</span>{% endif %}</h1>
+    <div class="headline">{{ c.headline }}</div>
+    {% if c.summary %}<ul class="summary">{% for s in c.summary %}<li>{{ s }}</li>{% endfor %}</ul>{% endif %}
+  </div>
+  <div class="tiles">
+    {{ tile(m, "^GSPC", "S&P 500") }}
+    {{ tile(m, "^IXIC", "那斯達克") }}
+    {{ tile(m, "^DJI", "道瓊") }}
+    {{ tile(m, "^SOX", "費半 SOX") }}
+    {{ tile(m, "TSM", "台積電 ADR") }}
+    {{ tile(m, "^VIX", "VIX 恐慌指數", "level") }}
+    {{ tile(m, "^TNX", "美債 10Y", "level", 3) }}
+    {{ tile(m, "^TWII", "台股加權", "level", 0, true) }}
+  </div>
+</div>
+
+<div class="grid" style="grid-template-columns: 470px 1fr 520px;">
+  <!-- 左：情緒、債匯商品 -->
+  <div class="grid" style="align-content:start">
+    <div class="panel">
+      <h2>情緒＋債匯商品</h2>
+      <div class="body">
+        <table>
+          <tr><th>指標</th><th class="r">數值</th><th class="r">變動</th></tr>
+          {% set fg = m.get('fear_greed') or {} %}
+          <tr><td>CNN 恐懼貪婪</td><td class="r num">{{ fg.score|fmt(0) }}</td><td class="r">{{ fg.rating or '—' }}</td></tr>
+          {% set v = m.prices.get('^VIX', {}) %}
+          <tr><td>VIX 恐慌指數</td><td class="r num">{{ v.last|fmt(2) }}</td><td class="r">{{ chg(v.chg, '') }}</td></tr>
+          {% set y = m.get('yields') or {} %}
+          <tr><td>美債 2Y <span class="muted small">{{ (y.DGS2 or {}).date }}</span></td><td class="r num">{{ (y.DGS2 or {}).last|fmt(2) }}%</td><td class="r">{{ chg((y.DGS2 or {}).chg_bp, 'bp') }}</td></tr>
+          {% set t = m.prices.get('^TNX', {}) %}
+          <tr><td>美債 10Y</td><td class="r num">{{ t.last|fmt(3) }}%</td><td class="r">{{ chg(t.chg * 100 if t.chg is not none else none, 'bp') }}</td></tr>
+          {% for sym, label, d in [('DX-Y.NYB','美元指數',2), ('TWD=X','美元/台幣',3), ('JPY=X','美元/日圓',2), ('EURUSD=X','歐元/美元',4), ('CL=F','WTI 原油',2), ('BZ=F','布蘭特原油',2), ('GC=F','黃金',1), ('BTC-USD','比特幣',0)] %}
+          {% set p = m.prices.get(sym, {}) %}
+          <tr><td>{{ label }}{% if p.roll_warning %}<span class="warn">*</span>{% endif %}</td><td class="r num">{{ p.last|fmt(d) }}</td><td class="r">{{ chg(p.chg_pct) }}</td></tr>
+          {% endfor %}
+        </table>
+        {% if m.prices.get('BZ=F', {}).roll_warning or m.prices.get('CL=F', {}).roll_warning %}
+        <div class="small warn" style="margin-top:6px">* 期貨換月，單日漲跌幅僅供參考</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- 中：今日焦點、台股 -->
+  <div class="grid" style="align-content:start">
+    <div class="panel">
+      <h2>今日焦點</h2>
+      <div class="body">
+        <ol class="items">
+          {% for d in c.drivers %}<li><b>{{ d.title }}</b><span>{{ d.text }}</span></li>{% endfor %}
+        </ol>
+      </div>
+    </div>
+    {% if c.tw %}
+    <div class="panel">
+      <h2>台股觀察</h2>
+      <div class="body">
+        <ol class="items">
+          {% for d in c.tw %}<li><b>{{ d.title }}</b><span>{{ d.text }}</span></li>{% endfor %}
+        </ol>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- 右：央行、行事曆 -->
+  <div class="grid" style="align-content:start">
+    <div class="panel">
+      <h2>本週央行利率決策</h2>
+      <div class="body">
+        {% if c.central_banks %}
+        <table>
+          <tr><th>央行</th><th>台灣時間</th><th>預期／結果</th></tr>
+          {% for b in c.central_banks %}
+          <tr><td><b>{{ b.bank }}</b></td><td class="small">{{ b.time_tw }}</td><td class="small">{% if b.result %}<span class="hot">{{ b.result }}</span>{% else %}{{ b.expectation }}{% endif %}</td></tr>
+          {% endfor %}
+        </table>
+        {% else %}
+        <div class="muted">本週無主要央行利率決策會議{% if c.next_fomc %}；下一場 FOMC：{{ c.next_fomc }}{% endif %}</div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="panel">
+      <h2>今日行事曆（台灣時間）</h2>
+      <div class="body">
+        <table>
+          {% for e in c.today_calendar %}
+          <tr><td class="num" style="white-space:nowrap">{{ e.time_tw }}</td><td><span class="{{ 'hot' if e.hot }}">{{ e.event }}</span>{% if e.focus %}<div class="small muted">{{ e.focus }}</div>{% endif %}</td></tr>
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

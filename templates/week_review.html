@@ -1,0 +1,70 @@
+{% extends "_base.html" %}
+{% from "_macros.html" import chg, tile %}
+{% set r = c.review %}
+{% block title %}本週市場結論 {{ c.date }}{% endblock %}
+{% block body %}
+<div class="head">
+  <div class="badge"><b>週報</b><span>{{ c.week_label }}</span></div>
+  <div class="head-main">
+    <h1>{{ c.week_label }} 本週市場結論 {% if r.mood %}<span class="mood">{{ r.mood }}</span>{% endif %}</h1>
+    <div class="headline">{{ r.headline }}</div>
+    {% if r.summary %}<ul class="summary">{% for s in r.summary %}<li>{{ s }}</li>{% endfor %}</ul>{% endif %}
+  </div>
+  <div class="tiles">
+    {{ tile(m, "^GSPC", "S&P 500 週", "wk_pct") }}
+    {{ tile(m, "^IXIC", "那斯達克 週", "wk_pct") }}
+    {{ tile(m, "^DJI", "道瓊 週", "wk_pct") }}
+    {{ tile(m, "^SOX", "費半 週", "wk_pct") }}
+    {{ tile(m, "TSM", "台積電ADR 週", "wk_pct") }}
+    {{ tile(m, "^VIX", "VIX", "level") }}
+    {{ tile(m, "^TNX", "美債 10Y", "level", 3) }}
+    {{ tile(m, "BZ=F", "布蘭特原油", "level") }}
+  </div>
+</div>
+
+<div class="grid" style="grid-template-columns: 1fr 1fr;">
+  <div class="grid" style="align-content:start">
+    <div class="panel">
+      <h2>主要指數／ETF 本週表現</h2>
+      <div class="body">
+        <table>
+          {% for sym, label in [('SPY','SPY / S&P 500'), ('QQQ','QQQ / Nasdaq 100'), ('SOXX','SOXX / 費半'), ('DIA','DIA / 道瓊'), ('IWM','IWM / 羅素 2000')] %}
+          {% set p = m.prices.get(sym, {}) %}
+          <tr>
+            <td style="width:230px"><b>{{ label }}</b></td>
+            <td class="r" style="width:110px">{{ chg(p.wk_pct) }}</td>
+            <td class="small">{{ (r.index_notes or {}).get(sym, '') }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>產業龍頭</h2>
+      <div class="body" style="display:grid;grid-template-columns:1fr 1fr;gap:10px 18px">
+        {% for l in r.leaders %}
+        {% set p = m.prices.get(l.symbol, {}) %}
+        <div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <img src="https://financialmodelingprep.com/image-stock/{{ l.symbol }}.png" style="width:26px;height:26px;object-fit:contain" onerror="this.remove()">
+            <b class="hot">{{ l.name }} / {{ l.symbol }}</b>
+            {% if p.wk_pct is not none and p %}{{ chg(p.wk_pct) }}{% endif %}
+          </div>
+          <div class="small">{{ l.text }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  <div class="grid" style="align-content:start">
+    <div class="panel">
+      <h2>AI 主線</h2>
+      <div class="body"><ol class="items">{% for t in r.ai_themes %}<li><b>{{ t.title }}</b><span>{{ t.text }}</span></li>{% endfor %}</ol></div>
+    </div>
+    <div class="panel">
+      <h2>非 AI 主線</h2>
+      <div class="body"><ol class="items">{% for t in r.other_themes %}<li><b>{{ t.title }}</b><span>{{ t.text }}</span></li>{% endfor %}</ol></div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>{% block title %}晨報{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Roboto+Mono:wght@500;700&display=block" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1b2430;
+    --muted: #5c6878;
+    --line: #dfe4ea;
+    --panel: #ffffff;
+    --bg: #eef1f5;
+    --bar: #2b3442;
+    --accent: #c8102e;
+    --brand: #14365d;
+    --up: #d62828;      /* 台灣習慣：紅漲 */
+    --down: #11845b;    /* 綠跌 */
+    --tech-bg: #e7f0ff;
+    --tech-line: #3b6fd8;
+    --semi-bg: #f1e9ff;
+    --semi-line: #7a4cd6;
+    --hot: #e2711d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 1600px;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    font-size: 19px;
+    line-height: 1.45;
+    padding: 22px;
+  }
+  .num { font-family: "Roboto Mono", monospace; font-weight: 700; }
+  .up { color: var(--up); }
+  .down { color: var(--down); }
+  .flat { color: var(--muted); }
+  .muted { color: var(--muted); }
+  .small { font-size: 15px; }
+
+  /* 頁首 */
+  .head { display: flex; gap: 22px; align-items: stretch; background: var(--panel); border-radius: 14px; padding: 18px 22px; margin-bottom: 16px; }
+  .badge { width: 104px; flex: none; border-radius: 14px; background: var(--brand); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .badge b { font-size: 34px; font-weight: 900; letter-spacing: 2px; }
+  .badge span { font-size: 14px; opacity: .8; }
+  .head-main { flex: 1; min-width: 0; }
+  .head h1 { font-size: 36px; font-weight: 900; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .mood { font-size: 18px; font-weight: 700; color: #fff; background: var(--accent); padding: 3px 12px; border-radius: 999px; }
+  .headline { margin-top: 6px; font-size: 21px; font-weight: 700; }
+  .summary { margin-top: 6px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; font-size: 18px; }
+  .summary li { list-style: none; }
+  .tiles { display: grid; grid-template-columns: repeat(4, 128px); gap: 8px; align-content: center; }
+  .tile { border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; text-align: center; }
+  .tile .t { font-size: 14px; color: var(--muted); font-weight: 700; white-space: nowrap; }
+  .tile .v { font-size: 20px; }
+  .tile .s { font-size: 13px; color: var(--muted); }
+
+  /* 版面 */
+  .grid { display: grid; gap: 16px; }
+  .panel { background: var(--panel); border-radius: 12px; overflow: hidden; }
+  .panel h2 { background: var(--bar); color: #fff; font-size: 20px; font-weight: 700; text-align: center; padding: 6px 10px; }
+  .panel .body { padding: 10px 14px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { font-size: 16px; color: var(--muted); text-align: left; padding: 5px 6px; border-bottom: 2px solid var(--line); white-space: nowrap; }
+  td { padding: 6px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  td.r, th.r { text-align: right; }
+  .hot { color: var(--hot); font-weight: 700; }
+  ol.items { list-style: none; counter-reset: n; }
+  ol.items li { counter-increment: n; position: relative; padding: 6px 0 6px 40px; border-bottom: 1px dashed var(--line); }
+  ol.items li:last-child { border-bottom: none; }
+  ol.items li::before { content: counter(n); position: absolute; left: 0; top: 7px; width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700; font-size: 16px; display: flex; align-items: center; justify-content: center; }
+  ol.items b { display: block; font-size: 19px; }
+  ol.items span { color: #39434f; font-size: 17px; }
+  .foot { margin-top: 12px; font-size: 13px; color: var(--muted); display: flex; justify-content: space-between; gap: 20px; }
+  .warn { color: var(--hot); }
+</style>
+{% block head %}{% endblock %}
+</head>
+<body>
+{% block body %}{% endblock %}
+<div class="foot">
+  <span>資料來源：Yahoo Finance（yfinance）、FRED、CNN、Nasdaq、各大財經新聞｜產生時間 {{ m.generated_at_utc }} UTC</span>
+  <span>僅供參考，不構成投資建議</span>
+</div>
+</body>
+</html>

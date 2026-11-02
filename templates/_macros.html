@@ -1,0 +1,19 @@
+{% macro chg(v, suffix="%") -%}
+{%- if v is none or v is undefined -%}<span class="flat">—</span>
+{%- elif suffix == "bp" -%}<span class="num {{ v|cls }}">{{ "%+.1f"|format(v) }}bp</span>
+{%- else -%}<span class="num {{ v|cls }}">{{ "%+.2f"|format(v) }}{{ suffix }}</span>{%- endif -%}
+{%- endmacro %}
+
+{% macro tile(m, sym, label, field="chg_pct", digits=2, show_date=false) -%}
+{%- set p = m.prices.get(sym, {}) -%}
+<div class="tile">
+  <div class="t">{{ label }}{% if show_date and p.date %} <span style="font-weight:400">{{ p.date[5:].replace('-', '/') }}</span>{% endif %}</div>
+  {%- if field == "level" %}
+  <div class="v num">{{ p.last|fmt(digits) }}</div>
+  <div class="s">{{ chg(p.chg_pct) }}</div>
+  {%- else %}
+  <div class="v">{{ chg(p.get(field)) }}</div>
+  <div class="s num">{{ p.last|fmt(digits) }}</div>
+  {%- endif %}
+</div>
+{%- endmacro %}

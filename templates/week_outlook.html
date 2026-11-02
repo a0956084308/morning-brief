@@ -1,0 +1,108 @@
+{% extends "_base.html" %}
+{% from "_macros.html" import chg %}
+{% set o = c.outlook %}
+{% block title %}下週前瞻 {{ c.date }}{% endblock %}
+{% block head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  .trig { margin-top: 6px; font-size: 17px; }
+  .trig b.bull { color: var(--up); }
+  .trig b.bear { color: var(--down); }
+  .w { color: var(--hot); font-weight: 700; font-family: "Roboto Mono", monospace; }
+  .strategy-title { color: var(--hot); font-size: 21px; font-weight: 900; margin-bottom: 4px; }
+</style>
+{% endblock %}
+{% block body %}
+<div class="head">
+  <div class="badge"><b>前瞻</b><span>{{ o.week_label }}</span></div>
+  <div class="head-main">
+    <h1>{{ o.week_label }} 下週前瞻 {% if o.bias %}<span class="mood">{{ o.bias }}</span>{% endif %}</h1>
+    <div class="headline">{{ o.headline }}</div>
+    {% if o.summary %}<ul class="summary">{% for s in o.summary %}<li>{{ s }}</li>{% endfor %}</ul>{% endif %}
+    {% if o.bull_trigger or o.bear_trigger %}
+    <div class="trig"><b class="bull">偏多：</b>{{ o.bull_trigger }}　<b class="bear">偏空：</b>{{ o.bear_trigger }}</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="grid" style="grid-template-columns: 1fr 1fr;">
+  <div class="grid" style="align-content:start">
+    <div class="panel">
+      <h2>情緒＋流動性指標</h2>
+      <div class="body">
+        {% set fg = m.get('fear_greed') or {} %}
+        {% set v = m.prices.get('^VIX', {}) %}
+        {% set nl = m.get('net_liquidity') or {} %}
+        {% set notes = o.indicator_notes or {} %}
+        <table>
+          <tr><th>指標</th><th class="r">數值</th><th>解讀</th></tr>
+          <tr><td>CNN 恐懼貪婪</td><td class="r"><span class="num">{{ fg.score|fmt(0) }}</span>｜{{ fg.rating or '—' }}</td><td class="small">{{ notes.fear_greed }}</td></tr>
+          <tr><td>VIX 恐慌指數</td><td class="r"><span class="num">{{ v.last|fmt(2) }}</span> {{ chg(v.wk_pct) }}</td><td class="small">{{ notes.vix }}</td></tr>
+          <tr><td>淨流動性</td><td class="r"><span class="num">{{ nl.last|fmt(3) }}</span> 兆{% if nl.wk_chg_bn is not none %}<div class="small">週變動 <span class="num {{ nl.wk_chg_bn|cls }}">{{ "%+.0f"|format(nl.wk_chg_bn * 10) }} 億美元</span></div>{% endif %}</td><td class="small">{{ notes.net_liquidity }}</td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>淨流動性 vs SPY / SOXX（近 8 週）</h2>
+      <div class="body"><div style="height:260px"><canvas id="nl"></canvas></div>
+        <div class="small muted">淨流動性 = Fed 資產 − TGA − 隔夜逆回購（每週三，FRED）；ETF 為該週三或之前最近收盤價</div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>投資觀點分析</h2>
+      <div class="body"><ol class="items">{% for t in o.views %}<li><b>{{ t.title }}</b><span>{{ t.text }}</span></li>{% endfor %}</ol></div>
+    </div>
+  </div>
+  <div class="grid" style="align-content:start">
+    <div class="panel">
+      <h2>下週重要行事曆（台灣時間）</h2>
+      <div class="body">
+        <table>
+          <tr><th>日期</th><th>事件</th><th>觀察重點</th></tr>
+          {% for e in o.calendar %}
+          <tr><td style="white-space:nowrap">{{ e.date }}</td><td class="{{ 'hot' if e.hot }}">{{ e.event }}</td><td class="small">{{ e.focus }}</td></tr>
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>多空情境矩陣</h2>
+      <div class="body">
+        <table>
+          <tr><th>情境</th><th>觸發條件</th><th>參考區間</th><th class="r">權重</th></tr>
+          {% for s in o.scenarios %}
+          <tr><td style="white-space:nowrap"><b>{{ s.name }}</b></td><td class="small">{{ s.trigger }}</td><td class="small">{{ s.range }}</td><td class="r w">{{ s.weight }}</td></tr>
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>操作策略</h2>
+      <div class="body">
+        <div class="strategy-title">{{ o.strategy_title }}</div>
+        <ol class="items">{% for t in o.strategy %}<li><span>{{ t }}</span></li>{% endfor %}</ol>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  const D = {{ chart|tojson }};
+  if (window.Chart && D.labels.length) {
+    Chart.defaults.font.family = '"Noto Sans TC", sans-serif';
+    Chart.defaults.font.size = 15;
+    Chart.defaults.animation = false;
+    new Chart(document.getElementById('nl'), {
+      type: 'line',
+      data: { labels: D.labels, datasets: [
+        { label: '淨流動性（兆美元）', data: D.nl, borderColor: '#14365d', backgroundColor: '#14365d', yAxisID: 'y', tension: .25, borderWidth: 3 },
+        { label: 'SPY', data: D.spy, borderColor: '#e2711d', backgroundColor: '#e2711d', yAxisID: 'y1', tension: .25, borderWidth: 2.5 },
+        { label: 'SOXX', data: D.soxx, borderColor: '#2a9d8f', backgroundColor: '#2a9d8f', yAxisID: 'y1', tension: .25, borderWidth: 2.5 },
+      ]},
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'top' } },
+        scales: { y: { position: 'left', title: { display: true, text: '兆美元' } },
+                  y1: { position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'ETF 收盤' } } } }
+    });
+  }
+</script>
+{% endblock %}
