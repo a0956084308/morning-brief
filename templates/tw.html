@@ -39,8 +39,8 @@
     <div class="kpis">
       {% set ix = t.index or {} %}
       <div class="kpi"><div class="t">加權指數</div><div class="v num">{{ ix.close|fmt(2) }}</div><div class="s">{{ lots(ix.chg|round(2) if ix.chg is not none else none) }} 點 {{ chg(ix.chg_pct) }}</div></div>
-      {% set nt = (t.tx_night or {}).night or {} %}
-      <div class="kpi"><div class="t">台指期夜盤 <span style="font-weight:400">{{ nt.month[4:] ~ '月' if nt.month }}</span></div><div class="v num">{{ nt.get('close')|fmt(0) }}</div><div class="s">{{ lots(nt.get('chg')|int if nt.get('chg') is not none else none) }} 點 {{ chg(nt.get('chg_pct')) }}</div></div>
+      {% set txn = t.tx_night or {} %}{% set nt = txn.night or {} %}
+      <div class="kpi"><div class="t">台指期夜盤 <span style="font-weight:400">{{ txn.night_evening[5:] ~ ' 晚' if txn.night_evening }}</span>{% if txn and not txn.is_last_night %} <span class="warn">（非昨晚）</span>{% endif %}</div><div class="v num">{{ nt.get('close')|fmt(0) }}</div><div class="s">{{ lots(nt.get('chg')|int if nt.get('chg') is not none else none) }} 點 {{ chg(nt.get('chg_pct')) }}</div></div>
       <div class="kpi"><div class="t">成交金額</div><div class="v num">{{ "{:,}".format(ix.turnover_e8 or 0) }}</div><div class="s">億元</div></div>
       {% set tot = (inst.summary or [])|selectattr('name','equalto','合計')|first %}
       <div class="kpi"><div class="t">三大法人合計</div><div class="v">{{ amt(tot.net / 1e8 if tot else none) }}</div><div class="s">億元</div></div>

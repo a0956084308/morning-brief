@@ -280,12 +280,17 @@ def taifex_night():
     df = df.apply(lambda s: s.str.strip())
     df = df[(df["契約"] == "TX") & df["到期月份(週別)"].str.fullmatch(r"\d{6}")]
     out = {}
+    day_dates = sorted(set(df[df["交易時段"] == "一般"]["交易日期"]))
     for session, key in (("盤後", "night"), ("一般", "day")):
         s = df[df["交易時段"] == session]
         if not len(s):
             continue
         last_date = s["交易日期"].max()
         row = s[s["交易日期"] == last_date].sort_values("到期月份(週別)").iloc[0]
+        if key == "night":
+            # 期交所把夜盤歸屬到「下一個交易日」：交易日 D 的盤後 = D 的前一個交易日晚上
+            prev = [x for x in day_dates if x < last_date]
+            out["night_evening"] = prev[-1] if prev else None
         out[key] = {
             "trade_date": last_date,
             "month": row["到期月份(週別)"],
@@ -435,6 +440,9 @@ def main():
     step("institutional", lambda: institutional(d, last_close))
     step("futures", lambda: taifex_oi(d))
     step("tx_night", taifex_night)
+    if result.get("tx_night"):
+        # 夜盤是否為「最近交易日（籌碼資料日）晚上」的那一場
+        result["tx_night"]["is_last_night"] = result["tx_night"].get("night_evening") == d.strftime("%Y/%m/%d")
     step("maintenance", lambda: maintenance_risk(hist, last_close))
     step("etf_00981A", lambda: etf_diff("00981A", "主動統一台股增長", etf_00981a(), names))
     step("etf_00992A", lambda: etf_diff("00992A", "主動群益科技創新", etf_00992a(), names))
