@@ -35,6 +35,40 @@ blockquote { color:#5c6878; border-left:4px solid #dfe4ea; margin:8px 0; padding
 """
 
 
+def send_resend(subject, html, text, images):
+    """透過 Resend HTTPS API 寄信（雲端環境擋 SMTP 時使用）。
+
+    免費方案沒有自己的網域時，寄件者固定用 onboarding@resend.dev，
+    且只能寄到註冊 Resend 的那個信箱。
+    """
+    import base64
+
+    import requests
+
+    to = [x.strip() for x in (os.environ.get("MAIL_TO") or "a0956084308@gmail.com").split(",") if x.strip()]
+    sender = os.environ.get("MAIL_FROM") or "國際財經晨報 <onboarding@resend.dev>"
+    attachments = []
+    for i, p in enumerate(images):
+        with open(p, "rb") as f:
+            attachments.append(
+                {
+                    "filename": os.path.basename(p),
+                    "content": base64.b64encode(f.read()).decode(),
+                    "content_type": "image/png",
+                    "content_id": f"img{i}",
+                }
+            )
+    r = requests.post(
+        "https://api.resend.com/emails",
+        headers={"Authorization": f"Bearer {os.environ['RESEND_API_KEY']}", "Content-Type": "application/json"},
+        json={"from": sender, "to": to, "subject": subject, "html": html, "text": text, "attachments": attachments},
+        timeout=120,
+    )
+    if r.status_code >= 300:
+        sys.exit(f"Resend 寄信失敗 HTTP {r.status_code}：{r.text[:500]}")
+    print(f"已寄出（Resend）：{subject} → {', '.join(to)}（圖片 {len(images)} 張）id={r.json().get('id')}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--subject", required=True)
@@ -68,10 +102,14 @@ def main():
         print(f"預覽已寫入 {path}（未寄出）")
         return
 
+    if os.environ.get("RESEND_API_KEY"):
+        send_resend(args.subject, html, report_md, images)
+        return
+
     user = os.environ.get("GMAIL_USER")
     pw = (os.environ.get("GMAIL_APP_PASSWORD") or "").replace(" ", "")
     if not user or not pw:
-        sys.exit("缺少環境變數 GMAIL_USER 或 GMAIL_APP_PASSWORD，請到雲端環境設定填入")
+        sys.exit("缺少環境變數 RESEND_API_KEY（或 GMAIL_USER＋GMAIL_APP_PASSWORD），請到雲端環境設定填入")
     to = [x.strip() for x in (os.environ.get("MAIL_TO") or user).split(",") if x.strip()]
 
     msg = MIMEMultipart("related")

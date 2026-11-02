@@ -77,19 +77,23 @@ def main():
     m = load("market.json")
     e = load("earnings.json")
     c = load("content.json")
+    t = load("tw.json", required=False)
 
     env = Environment(loader=FileSystemLoader(os.path.join(ROOT, "templates")), autoescape=select_autoescape(["html"]))
     env.filters["fmt"] = fmt
     env.filters["cls"] = cls
 
     if args.mode == "daily":
-        pages = [("1_daily", "daily.html"), ("2_earnings", "earnings.html")]
+        pages = [("1_daily", "daily.html"), ("2_tw", "tw.html"), ("3_earnings", "earnings.html")]
         week_label = "本週"
     else:
-        pages = [("1_week_review", "week_review.html"), ("2_week_outlook", "week_outlook.html"), ("3_earnings", "earnings.html")]
+        pages = [("1_week_review", "week_review.html"), ("2_week_outlook", "week_outlook.html"), ("3_tw", "tw.html"), ("4_earnings", "earnings.html")]
         week_label = "下週"
+    if not t:
+        pages = [p for p in pages if p[1] != "tw.html"]
+        print("[warn] 沒有 data/tw.json，略過台股籌碼圖", file=sys.stderr)
 
-    ctx = {"m": m, "e": e, "c": c, "week_label": week_label, "chart": chart_data(m)}
+    ctx = {"m": m, "e": e, "c": c, "t": t, "week_label": week_label, "chart": chart_data(m)}
     os.makedirs(OUT, exist_ok=True)
     outputs = []
     with sync_playwright() as p:

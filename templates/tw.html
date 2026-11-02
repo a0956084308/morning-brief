@@ -1,0 +1,149 @@
+{% extends "_base.html" %}
+{% from "_macros.html" import chg %}
+{% set inst = t.institutional or {} %}
+{% set mg = t.margin or {} %}
+{% set fut = t.futures or {} %}
+{% set mt = t.maintenance or {} %}
+{% block title %}台股籌碼 {{ t.label }}{% endblock %}
+{% block head %}
+<style>
+  .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 8px; }
+  .kpi { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+  .kpi .t { font-size: 14px; color: var(--muted); font-weight: 700; }
+  .kpi .v { font-size: 24px; }
+  .kpi .s { font-size: 14px; }
+  table.tight td, table.tight th { padding: 3px 5px; font-size: 16px; }
+  table.tight td.nm { white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+  .code { font-family: "Roboto Mono", monospace; color: var(--muted); font-size: 13px; margin-right: 4px; }
+  tr.big td { background: #fff4e5; font-weight: 700; }
+  .pill { display: inline-block; font-size: 12px; font-weight: 700; padding: 0 6px; border-radius: 4px; color: #fff; }
+  .pill.add { background: var(--up); } .pill.cut { background: var(--down); }
+  .pill.new { background: #c2185b; } .pill.out { background: #455a64; }
+  .note { font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .etf-sum { display: flex; gap: 14px; font-size: 15px; color: var(--muted); margin-bottom: 6px; flex-wrap: wrap; }
+  .etf-sum b { color: var(--ink); }
+  .bigbox { border: 2px solid var(--hot); border-radius: 10px; padding: 6px 8px; margin-bottom: 8px; }
+  .bigbox .h { color: var(--hot); font-weight: 900; font-size: 16px; margin-bottom: 2px; }
+</style>
+{% endblock %}
+{% macro amt(v) -%}{% if v is none %}—{% else %}<span class="num {{ v|cls }}">{{ "%+.1f"|format(v) }}</span>{% endif %}{%- endmacro %}
+{% macro lots(v) -%}{% if v is none %}—{% else %}<span class="num {{ v|cls }}">{{ "{:+,}".format(v) }}</span>{% endif %}{%- endmacro %}
+{% macro pill(s) -%}<span class="pill {{ {'加碼':'add','減碼':'cut','新增':'new','出清':'out'}[s] }}">{{ s }}</span>{%- endmacro %}
+
+{% block body %}
+<div class="head">
+  <div class="badge"><b>籌碼</b><span>{{ t.date[5:].replace('-', '/') }}</span></div>
+  <div class="head-main">
+    <h1>{{ t.label }} 台股籌碼日報</h1>
+    {% if c.tw_notes %}<ul class="summary">{% for s in c.tw_notes %}<li>{{ s }}</li>{% endfor %}</ul>{% endif %}
+    <div class="kpis">
+      {% set ix = t.index or {} %}
+      <div class="kpi"><div class="t">加權指數</div><div class="v num">{{ ix.close|fmt(2) }}</div><div class="s">{{ lots(ix.chg|round(2) if ix.chg is not none else none) }} 點 {{ chg(ix.chg_pct) }}</div></div>
+      <div class="kpi"><div class="t">成交金額</div><div class="v num">{{ "{:,}".format(ix.turnover_e8 or 0) }}</div><div class="s">億元</div></div>
+      {% set tot = (inst.summary or [])|selectattr('name','equalto','合計')|first %}
+      <div class="kpi"><div class="t">三大法人合計</div><div class="v">{{ amt(tot.net / 1e8 if tot else none) }}</div><div class="s">億元</div></div>
+      {% set ff = fut.foreign or {} %}
+      <div class="kpi"><div class="t">外資台指期淨未平倉</div><div class="v">{{ lots(ff.net_oi) }}</div><div class="s">口，較前日 {{ lots(ff.chg) }}</div></div>
+      {% set fa = mg.fin_amt_k or {} %}
+      <div class="kpi"><div class="t">融資餘額</div><div class="v num">{{ "%.0f"|format((fa.today or 0) / 1e5) }}</div><div class="s">億元，增減 {{ amt((fa.chg or 0) / 1e5) }} 億</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="grid" style="grid-template-columns: 1fr 1fr 1fr;">
+  <div class="panel">
+    <h2>三大法人買賣超（上市，億元）</h2>
+    <div class="body">
+      <table class="tight">
+        <tr><th>法人</th><th class="r">買進</th><th class="r">賣出</th><th class="r">買賣超</th></tr>
+        {% for r in inst.summary or [] %}{% if r.name != '外資自營商' %}
+        <tr {% if r.name == '合計' %}style="font-weight:700"{% endif %}><td>{{ r.name.replace('(不含外資自營商)', '') }}</td><td class="r num">{{ "%.1f"|format(r.buy / 1e8) }}</td><td class="r num">{{ "%.1f"|format(r.sell / 1e8) }}</td><td class="r">{{ amt(r.net / 1e8) }}</td></tr>
+        {% endif %}{% endfor %}
+      </table>
+      <table class="tight" style="margin-top:8px">
+        <tr><th>台指期未平倉（口）</th><th class="r">淨部位</th><th class="r">增減</th></tr>
+        {% for k, label in [('foreign','外資'),('trust','投信'),('dealer','自營商')] %}{% set x = fut.get(k) or {} %}
+        <tr><td>{{ label }}</td><td class="r">{{ lots(x.net_oi) }}</td><td class="r">{{ lots(x.chg) }}</td></tr>
+        {% endfor %}
+      </table>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>外資買超前 10（億元）</h2>
+    <div class="body"><table class="tight">
+      <tr><th>個股</th><th class="r">張數</th><th class="r">金額</th></tr>
+      {% for x in inst.foreign_buy or [] %}<tr><td class="nm"><span class="code">{{ x.code }}</span>{{ x.name }}</td><td class="r">{{ lots(x.foreign_lots) }}</td><td class="r">{{ amt(x.foreign_amt_e8) }}</td></tr>{% endfor %}
+    </table></div>
+  </div>
+  <div class="panel">
+    <h2>外資賣超前 10（億元）</h2>
+    <div class="body"><table class="tight">
+      <tr><th>個股</th><th class="r">張數</th><th class="r">金額</th></tr>
+      {% for x in inst.foreign_sell or [] %}<tr><td class="nm"><span class="code">{{ x.code }}</span>{{ x.name }}</td><td class="r">{{ lots(x.foreign_lots) }}</td><td class="r">{{ amt(x.foreign_amt_e8) }}</td></tr>{% endfor %}
+    </table></div>
+  </div>
+
+  <div class="panel">
+    <h2>投信買賣超前 5（億元）</h2>
+    <div class="body"><table class="tight">
+      <tr><th>買超</th><th class="r">金額</th><th>賣超</th><th class="r">金額</th></tr>
+      {% set tb = (inst.trust_buy or [])[:5] %}{% set ts = (inst.trust_sell or [])[:5] %}
+      {% for i in range(5) %}<tr>
+        <td class="nm">{% if tb[i] is defined %}<span class="code">{{ tb[i].code }}</span>{{ tb[i].name }}{% endif %}</td><td class="r">{% if tb[i] is defined %}{{ amt(tb[i].trust_amt_e8) }}{% endif %}</td>
+        <td class="nm">{% if ts[i] is defined %}<span class="code">{{ ts[i].code }}</span>{{ ts[i].name }}{% endif %}</td><td class="r">{% if ts[i] is defined %}{{ amt(ts[i].trust_amt_e8) }}{% endif %}</td>
+      </tr>{% endfor %}
+    </table></div>
+  </div>
+  <div class="panel">
+    <h2>融資增減前 8（張）</h2>
+    <div class="body"><table class="tight">
+      {% set fi = ((t.margin_movers or {}).fin_inc or [])[:8] %}{% set fd = ((t.margin_movers or {}).fin_dec or [])[:8] %}
+      <tr><th>融資增加</th><th class="r">張</th><th>融資減少</th><th class="r">張</th></tr>
+      {% for i in range(8) %}<tr>
+        <td class="nm">{% if fi[i] is defined %}<span class="code">{{ fi[i].code }}</span>{{ fi[i].name }}{% endif %}</td><td class="r">{% if fi[i] is defined %}{{ lots(fi[i].chg) }}{% endif %}</td>
+        <td class="nm">{% if fd[i] is defined %}<span class="code">{{ fd[i].code }}</span>{{ fd[i].name }}{% endif %}</td><td class="r">{% if fd[i] is defined %}{{ lots(fd[i].chg) }}{% endif %}</td>
+      </tr>{% endfor %}
+    </table>
+    {% set fl = mg.fin_lots or {} %}{% set sl = mg.short_lots or {} %}
+    <div class="note">全市場融資 {{ lots(fl.chg|int if fl.chg is not none else none) }} 張｜融券 {{ lots(sl.chg|int if sl.chg is not none else none) }} 張</div>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>⚠ 再跌一根維持率破 130%</h2>
+    <div class="body"><table class="tight">
+      <tr><th>個股</th><th class="r">收盤</th><th class="r">估成本</th><th class="r">維持率</th><th class="r">跌停後</th></tr>
+      {% for x in (mt.next_limit_down or [])[:12] %}<tr><td class="nm"><span class="code">{{ x.code }}</span>{{ x.name }}</td><td class="r num">{{ x.close|fmt(1) }}</td><td class="r num">{{ x.est_cost|fmt(1) }}</td><td class="r num">{{ x.ratio }}%</td><td class="r num down">{{ x.ratio_after }}%</td></tr>{% endfor %}
+    </table>
+    {% if mt.already_below %}<div class="note warn">已低於 130%：{% for x in mt.already_below[:6] %}{{ x.name }} {{ x.ratio }}%{% if not loop.last %}、{% endif %}{% endfor %}</div>{% endif %}
+    <div class="note">估算值：近 {{ mt.lookback_days }} 個交易日融資增減 × 收盤價推算平均成本，融資成數以 60% 計，只含融資餘額 1,000 張以上的上市股票</div>
+    </div>
+  </div>
+</div>
+
+<div class="grid" style="grid-template-columns: 1fr 1fr; margin-top:16px">
+  {% for key in ['etf_00981A', 'etf_00992A'] %}{% set e = t.get(key) or {} %}
+  <div class="panel">
+    <h2>{{ e.code }} {{ e.name }}　持股變化</h2>
+    <div class="body">
+      {% if e.error %}<div class="warn">{{ e.error }}</div>{% else %}
+      <div class="etf-sum"><span>比對 <b>{{ e.date_prev[5:].replace('-','/') }} → {{ e.date[5:].replace('-','/') }}</b></span><span>持股 <b>{{ e.holdings }}</b> 檔</span><span>變動 <b>{{ e.changes|length }}</b> 檔</span><span>增減 ≥100 張 <b class="hot">{{ e.big|length }}</b> 檔</span></div>
+      {% if e.big %}
+      <div class="bigbox"><div class="h">★ 增減 100 張以上</div>
+        <table class="tight">
+          {% for x in e.big %}<tr><td class="nm"><span class="code">{{ x.code }}</span>{{ x.name }}</td><td>{{ pill(x.status) }}</td><td class="r">{{ lots(x.chg_lots) }} 張</td><td class="r small muted">{{ "{:,}".format(x.lots_before) }} → {{ "{:,}".format(x.lots_after) }}</td></tr>{% endfor %}
+        </table>
+      </div>
+      {% endif %}
+      {% set small = e.changes|rejectattr('big')|list %}
+      {% if small %}
+      <table class="tight">
+        <tr><th>其他變動</th><th></th><th class="r">增減</th><th class="r">持有張數</th></tr>
+        {% for x in small %}<tr><td class="nm"><span class="code">{{ x.code }}</span>{{ x.name }}</td><td>{{ pill(x.status) }}</td><td class="r">{{ lots(x.chg_lots) }}</td><td class="r small muted">{{ "{:,}".format(x.lots_after) }}</td></tr>{% endfor %}
+      </table>
+      {% elif not e.big %}<div class="muted">本日持股無變動</div>{% endif %}
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -12,7 +12,7 @@
 ## 1. 安裝環境
 
 ```bash
-pip install -q -r requirements.txt
+python -m pip install -q -r requirements.txt   # 一定要用 python -m pip，雲端的 pip 和 python 可能是不同版本
 python -m playwright install --with-deps chromium || python -m playwright install chromium
 ```
 
@@ -26,7 +26,12 @@ python scripts/fetch_earnings.py --week current
 # saturday 模式（--extra 放你打算寫進「產業龍頭」的代號）
 python scripts/fetch_market.py --extra NVDA,AVGO,MU,GOOGL
 python scripts/fetch_earnings.py --week next
+
+# 兩種模式都要跑：前一交易日台股籌碼（約 2～3 分鐘，可以放背景先跑，同時去查新聞）
+python scripts/fetch_tw.py
 ```
+
+- `data/tw.json`：加權指數、三大法人、外資個股買賣超、台指期未平倉、融資券增減、「再跌一根維持率破 130%」個股（估算）、00981A／00992A 持股變化。
 
 - `data/market.json`：指數、ETF、個股、匯率、商品、VIX、美債殖利率（FRED，會晚 1～2 天）、淨流動性、CNN 恐懼貪婪。
 - `data/earnings.json`：該週全部 S&P 500 成分股財報，含盤前／盤後與台灣時間。
@@ -52,6 +57,7 @@ python scripts/fetch_earnings.py --week next
 寫作要求：
 - 圖片是「3 分鐘精華」，每一條都要短：標題 12 字內，說明 45 字內。
 - `drivers` 寫 4 條，`tw` 寫 3 條，`today_calendar` 寫 3～6 條，時間一律用台灣時間。
+- `tw_notes`（兩種模式都要寫）：2 條台股籌碼重點，依 `data/tw.json` 解讀法人動向、期貨部位、融資變化與 ETF 調整，每條 45 字內。
 - `central_banks`：只列本週真的有開會的；已公布的把結果寫進 `result`。本週都沒有就留空陣列，並填 `next_fomc`。
 - saturday 模式：
   - `review`：本週總結。`leaders` 放 4 家龍頭，代號要有在 `--extra` 裡抓過。`ai_themes`、`other_themes` 各 4 條。
@@ -66,6 +72,7 @@ python scripts/fetch_earnings.py --week next
 ### 一、一句話總結
 ### 二、美股收盤（道瓊、標普500、那斯達克、費半：點位、漲跌幅、原因；休市要註明）
 ### 三、台股相關（台積電 ADR、台指期夜盤、台廠相關美股、對今日開盤的影響）
+### 三之一、台股籌碼（依 tw.json：三大法人、外資買賣超前 5、台指期未平倉、融資券、再跌一根維持率破 130% 的個股、00981A／00992A 增減 100 張以上的持股）
 ### 四、總經與央行動態（官員發言；經濟數據用表格：實際 / 預期 / 前值）
 ### 五、債匯商品（表格：美債 2Y/10Y、美元指數、美元/台幣、美元/日圓、歐元/美元、WTI、布蘭特、黃金、比特幣、VIX，標明數據時間）
 ### 六、重大個股與財報結果（EPS、營收 vs 預期、財測、盤後反應）
@@ -85,7 +92,7 @@ python scripts/fetch_earnings.py --week next
 ### 三、本週關鍵事件回顧（央行、經濟數據、政治）
 ### 四、本週重要財報回顧
 ### 五、債匯商品週表現（表格）
-### 六、台股本週回顧與外資動向
+### 六、台股本週回顧與外資動向（含 tw.json 週五籌碼：法人、融資、維持率風險股、00981A／00992A 持股變化）
 ## 第二部分：下週前瞻與投資建議
 ### 七、下週行事曆（經濟數據、央行會議，台灣時間）
 ### 八、下週 S&P 500 財報重點（科技股與市值前 15 大）
@@ -112,7 +119,8 @@ python scripts/send_email.py --subject "國際財經晨報 MM/DD（週X）｜一
 python scripts/send_email.py --subject "週末財經週報 MM/DD｜本週總結＋下週前瞻"
 ```
 
-- 寄信失敗時，看錯誤訊息。缺少環境變數或登入失敗，代表使用者還沒在雲端環境設定好 `GMAIL_USER`、`GMAIL_APP_PASSWORD`，請在最後回覆說明。
+- 寄信走 Resend（環境變數 `RESEND_API_KEY`）。雲端環境會擋 Gmail SMTP，所以不要改用 SMTP 重試。
+- 寄信失敗時，在最後回覆附上錯誤訊息。缺少 `RESEND_API_KEY` 代表使用者還沒在雲端環境設定好。
 - 圖片產生失敗時，照樣寄出文字版（`render.py` 失敗就不會產生 images.json，`send_email.py` 會只寄文字）。
 
 ## 8. 收尾
