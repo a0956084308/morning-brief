@@ -93,7 +93,19 @@ def main():
     ap.add_argument("--report", default=os.path.join(OUT, "report.md"))
     ap.add_argument("--images", default=os.path.join(OUT, "images.json"), help="render.py 輸出的圖片清單")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--allow-warnings", action="store_true", help="品質檢查未通過仍寄出（信件最上方會列出未通過項目）")
     args = ap.parse_args()
+
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import preflight
+
+    pf = preflight.run()
+    failed = [c for c in pf["checks"] if c["required"] and not c["ok"]]
+    for c in pf["checks"]:
+        print(("✅" if c["ok"] else "❌" if c["required"] else "⚠️") + f" {c['name']}：{c['detail']}")
+    if failed and not args.allow_warnings and not args.dry_run:
+        sys.exit("品質檢查未通過，沒有寄出。請修正上面標 ❌ 的項目後重新寄送；"
+                 "真的無法修正且快到寄送期限時，才加 --allow-warnings 寄出。")
 
     with open(args.report, encoding="utf-8") as f:
         report_md = f.read()
@@ -105,6 +117,15 @@ def main():
     img_tags = "".join(f'<img class="brief" src="cid:img{i}" alt="晨報圖片 {i + 1}">' for i in range(len(images)))
     if images:
         img_tags = "<p class='note' style='margin-top:0'>💡 想放大或下載圖片，請點信件最下方的附件。</p>" + img_tags
+    if failed:
+        items = "".join(f"<li>{c['name']}：{c['detail']}</li>" for c in failed)
+        img_tags = (
+            "<div style='border:2px solid #e2711d;border-radius:8px;padding:8px 12px;margin-bottom:12px'>"
+            f"<b style='color:#e2711d'>⚠ 寄信前品質檢查有 {len(failed)} 項未通過，請留意：</b><ul>{items}</ul></div>"
+        ) + img_tags
+    else:
+        n = sum(1 for c in pf["checks"] if c["ok"])
+        img_tags = f"<p class='note' style='margin-top:0'>✅ 寄信前品質檢查通過（{n}/{len(pf['checks'])} 項）</p>" + img_tags
     body = markdown.markdown(report_md, extensions=["tables", "sane_lists"])
     html = (
         f"<html><head><meta charset='utf-8'><style>{STYLE}</style></head><body>"

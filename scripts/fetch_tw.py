@@ -396,7 +396,19 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=30, help="估算融資成本的回溯交易日數")
     ap.add_argument("--out", default=os.path.join(ROOT, "data", "tw.json"))
+    ap.add_argument("--night-only", action="store_true", help="只重抓台指期夜盤，更新既有的 tw.json")
     args = ap.parse_args()
+
+    if args.night_only:
+        with open(args.out, encoding="utf-8") as f:
+            result = json.load(f)
+        night = taifex_night()
+        night["is_last_night"] = night.get("night_evening") == result["date"].replace("-", "/")
+        result["tx_night"] = night
+        with open(args.out, "w", encoding="utf-8") as f:
+            json.dump(result, f, ensure_ascii=False, indent=2)
+        print(f"夜盤已更新：{night.get('night_evening')} 晚 {night.get('night', {}).get('close')}｜是否為昨晚：{night['is_last_night']}")
+        return
 
     result = {"errors": {}}
 
