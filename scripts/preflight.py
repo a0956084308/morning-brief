@@ -63,7 +63,26 @@ def run_tw():
     add("延伸資料齊全", not missing, f"缺少 {missing or '無'}", required=False)
     add("台股資料無錯誤", not t.get("errors"), f"errors={list((t.get('errors') or {}).keys())}", required=False)
     add("報告有資料查核小節", "資料查核" in report, "report.md 最後要有「資料查核」小節", required=False)
+    checks.append(simplified_check(report, *_content_texts("tw_content.json")))
     return _finish(checks)
+
+
+# 常見的「只有簡體才有」的字（繁體不會出現）
+SIMPLIFIED = set("这说为国们发时会对进过还经资业产价数质际贸汇银证币场长东车门问间题实现无与么样买卖级师网络电脑软硬设计统计历岁观视读写书图团环险该应边关开来见总点线显强弹压涨跌额亿万号样处级转运输气热让认识议论")
+
+
+def simplified_check(*texts):
+    found = sorted({ch for t in texts for ch in (t or "") if ch in SIMPLIFIED})
+    return {"name": "沒有簡體字", "ok": not found, "required": True,
+            "detail": f"發現簡體字：{''.join(found[:20])}" if found else "未發現簡體字"}
+
+
+def _content_texts(*names):
+    out = []
+    for n in names:
+        v = load(os.path.join(DATA, n))
+        out.append(json.dumps(v, ensure_ascii=False) if v else "")
+    return out
 
 
 def _finish(checks):
@@ -137,6 +156,7 @@ def run(mode="brief"):
     add("圖片已產生", len(images) >= 3 and all(os.path.exists(p) for p in images), f"{len(images)} 張", required=False)
     add("台股籌碼無錯誤", not t.get("errors"), f"errors={list((t.get('errors') or {}).keys())}", required=False)
     add("報告有資料查核小節", "資料查核" in report, "report.md 最後要有「資料查核」小節", required=False)
+    checks.append(simplified_check(report, *_content_texts("content.json")))
 
     return _finish(checks)
 
