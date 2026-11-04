@@ -1,0 +1,106 @@
+{% extends "_base.html" %}
+{% from "_macros.html" import chg %}
+{% set o = t.overview or {} %}
+{% set b = o.breadth or {} %}
+{% set ix = t.index or {} %}
+{% set tp = t.tpex or {} %}
+{% set fx = t.asia_fx or {} %}
+{% block title %}台股盤勢 {{ t.label }}{% endblock %}
+{% block head %}
+<style>
+  .kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-top: 8px; }
+  .kpi { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+  .kpi .t { font-size: 14px; color: var(--muted); font-weight: 700; }
+  .kpi .v { font-size: 24px; }
+  .kpi .s { font-size: 14px; }
+  table.tight td, table.tight th { padding: 3px 5px; font-size: 16px; }
+  td.nm { white-space: nowrap; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+  .code { font-family: "Roboto Mono", monospace; color: var(--muted); font-size: 13px; margin-right: 4px; }
+  .bar { height: 14px; border-radius: 3px; display: inline-block; vertical-align: middle; }
+  .bar.up { background: var(--up); } .bar.down { background: var(--down); }
+  .sector { display: grid; grid-template-columns: 140px 1fr 80px; white-space: nowrap; align-items: center; gap: 8px; padding: 2px 0; font-size: 16px; }
+  .sector .track { position: relative; height: 14px; }
+  .sector .mid { position: absolute; left: 50%; top: -2px; bottom: -2px; border-left: 1px dashed var(--line); }
+  .breadth { display: flex; height: 26px; border-radius: 6px; overflow: hidden; margin: 6px 0; font-size: 14px; color: #fff; font-weight: 700; }
+  .breadth div { display: flex; align-items: center; justify-content: center; }
+  .note { font-size: 13px; color: var(--muted); margin-top: 6px; }
+</style>
+{% endblock %}
+{% block body %}
+<div class="head">
+  <div class="badge"><b>盤勢</b><span>{{ t.date[5:].replace('-', '/') }}</span></div>
+  <div class="head-main">
+    <h1>{{ t.label }} 台股盤勢 {% if c.mood %}<span class="mood">{{ c.mood }}</span>{% endif %}</h1>
+    {% if c.headline %}<div class="headline">{{ c.headline }}</div>{% endif %}
+    {% if c.market_notes %}<ul class="summary">{% for s in c.market_notes %}<li>{{ s }}</li>{% endfor %}</ul>{% endif %}
+    <div class="kpis">
+      <div class="kpi"><div class="t">加權指數</div><div class="v num">{{ ix.close|fmt(2) }}</div><div class="s">{{ chg(ix.chg, ' 點') }} {{ chg(ix.chg_pct) }}</div></div>
+      <div class="kpi"><div class="t">櫃買指數</div><div class="v num">{{ tp.close|fmt(2) }}</div><div class="s">{{ chg(tp.chg, ' 點') }} {{ chg(tp.chg_pct) }}</div></div>
+      <div class="kpi"><div class="t">上市成交金額</div><div class="v num">{{ "{:,}".format(ix.turnover_e8 or 0) }}</div><div class="s">億元</div></div>
+      <div class="kpi"><div class="t">上漲／下跌家數</div><div class="v num"><span class="up">{{ b.up }}</span>／<span class="down">{{ b.down }}</span></div><div class="s">漲停 {{ b.limit_up }}｜跌停 {{ b.limit_down }}</div></div>
+      {% set twd = fx.get('TWD=X') or {} %}
+      <div class="kpi"><div class="t">新台幣（美元/台幣）</div><div class="v num">{{ twd.last|fmt(3) }}</div>
+        <div class="s">{% if twd.chg_pct is not none and twd.chg_pct is defined %}{% if twd.chg_pct > 0 %}<span class="down">貶 {{ "%.2f"|format(twd.chg_pct) }}%</span>{% elif twd.chg_pct < 0 %}<span class="up">升 {{ "%.2f"|format(-twd.chg_pct) }}%</span>{% else %}持平{% endif %}{% endif %}</div></div>
+      {% set top = (o.top_turnover or [{}])[0] %}
+      <div class="kpi"><div class="t">成交值第一</div><div class="v">{{ top.name }}</div><div class="s"><span class="num">{{ top.turnover_e8|fmt(0) }}</span> 億 {{ chg(top.chg_pct) }}</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="grid" style="grid-template-columns: 1.1fr 1fr 1fr;">
+  <div class="panel">
+    <h2>類股漲跌（上市類股指數）</h2>
+    <div class="body">
+      {% set mx = (o.sectors or [])|map(attribute='chg_pct')|map('abs')|max if o.sectors else 1 %}
+      {% for s in o.sectors or [] %}
+      <div class="sector">
+        <span>{{ s.name }}</span>
+        <div class="track"><div class="mid"></div>
+          {% set w = (s.chg_pct|abs / (mx or 1) * 50)|round(1) %}
+          {% if s.chg_pct >= 0 %}<span class="bar up" style="position:absolute;left:50%;width:{{ w }}%"></span>
+          {% else %}<span class="bar down" style="position:absolute;right:50%;width:{{ w }}%"></span>{% endif %}
+        </div>
+        <span class="r">{{ chg(s.chg_pct) }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="grid" style="align-content:start">
+    <div class="panel">
+      <h2>成交值前 10（億元）</h2>
+      <div class="body"><table class="tight">
+        <tr><th>個股</th><th class="r">收盤</th><th class="r">漲跌</th><th class="r">成交值</th></tr>
+        {% for x in o.top_turnover or [] %}<tr><td class="nm"><span class="code">{{ x.code }}</span>{{ x.name }}</td><td class="r num">{{ x.close|fmt(2) }}</td><td class="r">{{ chg(x.chg_pct) }}</td><td class="r num">{{ x.turnover_e8|fmt(1) }}</td></tr>{% endfor %}
+      </table></div>
+    </div>
+    <div class="panel">
+      <h2>亞股與匯率</h2>
+      <div class="body"><table class="tight">
+        <tr><th>市場</th><th class="r">收盤</th><th class="r">漲跌</th></tr>
+        {% for s in ['^N225', '^KS11', '000001.SS', '^HSI'] %}{% set x = fx.get(s) or {} %}
+        <tr><td>{{ x.name or s }}</td><td class="r num">{{ x.last|fmt(2) }}</td><td class="r">{{ chg(x.chg_pct) }}</td></tr>{% endfor %}
+        {% for s in ['JPY=X', 'KRW=X', 'CNY=X'] %}{% set x = fx.get(s) or {} %}
+        <tr><td>{{ x.name or s }}</td><td class="r num">{{ x.last|fmt(3) }}</td><td class="r small">{% if x.chg_pct is defined and x.chg_pct is not none %}{{ '當地貨幣貶' if x.chg_pct > 0 else '當地貨幣升' if x.chg_pct < 0 else '持平' }} {{ "%.2f"|format(x.chg_pct|abs) }}%{% endif %}</td></tr>{% endfor %}
+      </table>
+      <div class="note">匯率為 Yahoo Finance 報價，時間可能與台北外匯收盤（16:00）略有差異</div></div>
+    </div>
+  </div>
+
+  <div class="grid" style="align-content:start">
+    <div class="panel">
+      <h2>漲幅前 10</h2>
+      <div class="body"><table class="tight">
+        {% for x in o.top_gainers or [] %}<tr><td class="nm"><span class="code">{{ x.code }}</span>{{ x.name }}</td><td class="r num">{{ x.close|fmt(2) }}</td><td class="r">{{ chg(x.chg_pct) }}</td></tr>{% endfor %}
+      </table></div>
+    </div>
+    <div class="panel">
+      <h2>跌幅前 10</h2>
+      <div class="body"><table class="tight">
+        {% for x in o.top_losers or [] %}<tr><td class="nm"><span class="code">{{ x.code }}</span>{{ x.name }}</td><td class="r num">{{ x.close|fmt(2) }}</td><td class="r">{{ chg(x.chg_pct) }}</td></tr>{% endfor %}
+      </table>
+      <div class="note">漲跌幅排行只列成交值 1 億元以上的上市股票</div></div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -70,20 +70,26 @@ def chart_data(m):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--mode", choices=["daily", "saturday"], required=True)
+    ap.add_argument("--mode", choices=["daily", "saturday", "tw"], required=True)
     ap.add_argument("--scale", type=float, default=1.5, help="輸出解析度倍率")
     args = ap.parse_args()
 
-    m = load("market.json")
-    e = load("earnings.json")
-    c = load("content.json")
-    t = load("tw.json", required=False)
+    tw_mode = args.mode == "tw"
+    m = load("market.json", required=not tw_mode)
+    e = load("earnings.json", required=not tw_mode)
+    c = load("tw_content.json" if tw_mode else "content.json")
+    t = load("tw.json", required=tw_mode)
+    if tw_mode:  # 台股日報的產生時間以台股資料為準
+        m = {**(m or {}), "generated_at_utc": t.get("generated_at_utc", "")}
 
     env = Environment(loader=FileSystemLoader(os.path.join(ROOT, "templates")), autoescape=select_autoescape(["html"]))
     env.filters["fmt"] = fmt
     env.filters["cls"] = cls
 
-    if args.mode == "daily":
+    if tw_mode:
+        pages = [("1_tw_market", "tw_market.html"), ("2_tw", "tw.html"), ("3_tw_events", "tw_events.html")]
+        week_label = ""
+    elif args.mode == "daily":
         pages = [("1_daily", "daily.html"), ("2_tw", "tw.html"), ("3_earnings", "earnings.html")]
         week_label = "本週"
     else:

@@ -113,8 +113,12 @@ def margin_summary(table):
 
 
 # ---------- 收盤價 ----------
+MI_CACHE = {}
+
+
 def closes_today(d):
     j = twse("afterTrading/MI_INDEX", date=d.strftime("%Y%m%d"), type="ALLBUT0999")
+    MI_CACHE[d] = j or {}
     out = {}
     if not j:
         return out
@@ -397,7 +401,29 @@ def main():
     ap.add_argument("--days", type=int, default=30, help="估算融資成本的回溯交易日數")
     ap.add_argument("--out", default=os.path.join(ROOT, "data", "tw.json"))
     ap.add_argument("--night-only", action="store_true", help="只重抓台指期夜盤，更新既有的 tw.json")
+    ap.add_argument("--full", action="store_true", help="台股日報用：另外抓大盤類股、期權、借券、重大訊息、行事曆、亞股匯率")
+    ap.add_argument("--require-today", action="store_true", help="台股日報用：等證交所公布「今天」的融資資料；今天休市就結束（exit code 3）")
+    ap.add_argument("--wait-minutes", type=int, default=40)
     args = ap.parse_args()
+
+    if args.require_today:
+        today = dt.datetime.now(TW).date()
+        if not twse("fund/BFI82U", type="day", dayDate=today.strftime("%Y%m%d")):
+            os.makedirs(os.path.dirname(args.out), exist_ok=True)
+            with open(args.out, "w", encoding="utf-8") as f:
+                json.dump({"holiday": True, "date": today.isoformat()}, f, ensure_ascii=False)
+            print(f"{today} 沒有三大法人資料，判斷為休市，不產生台股日報")
+            sys.exit(3)
+        deadline = time.time() + args.wait_minutes * 60
+        while True:
+            j = twse("marginTrading/MI_MARGN", date=today.strftime("%Y%m%d"), selectType="MS")
+            if j:
+                print(f"{today} 融資融券資料已公布")
+                break
+            if time.time() > deadline:
+                sys.exit(f"等了 {args.wait_minutes} 分鐘，證交所仍未公布 {today} 的融資融券資料")
+            print("融資融券資料尚未公布，90 秒後再試…", flush=True)
+            time.sleep(90)
 
     if args.night_only:
         with open(args.out, encoding="utf-8") as f:
@@ -410,7 +436,7 @@ def main():
         print(f"夜盤已更新：{night.get('night_evening')} 晚 {night.get('night', {}).get('close')}｜是否為昨晚：{night['is_last_night']}")
         return
 
-    result = {"errors": {}}
+    result = {"errors": {}, "generated_at_utc": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M")}
 
     def step(key, fn):
         try:
@@ -458,6 +484,17 @@ def main():
     step("maintenance", lambda: maintenance_risk(hist, last_close))
     step("etf_00981A", lambda: etf_diff("00981A", "主動統一台股增長", etf_00981a(), names))
     step("etf_00992A", lambda: etf_diff("00992A", "主動群益科技創新", etf_00992a(), names))
+
+    if args.full:
+        import tw_extra
+
+        step("overview", lambda: tw_extra.market_overview(MI_CACHE.get(d) or {}))
+        step("asia_fx", tw_extra.asia_fx)
+        step("tpex", lambda: tw_extra.tpex_index(S))
+        step("options", lambda: tw_extra.options_chips(S, d))
+        step("sbl", lambda: tw_extra.sbl(twse, d, names))
+        big = {x["code"] for x in (result.get("overview") or {}).get("top_turnover", [])} | {"2330", "2317", "2454", "2308", "2382", "2412", "2881", "2882", "3711", "2303"}
+        step("events", lambda: tw_extra.events(S, twse, d, big))
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:

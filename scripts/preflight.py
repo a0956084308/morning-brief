@@ -42,7 +42,43 @@ def last_us_close(now_et):
     return d
 
 
-def run():
+def run_tw():
+    """台股日報（21:30）的檢查：資料要是今天的、融資已公布、查核滿 20 項。"""
+    today = dt.datetime.now(ZoneInfo("Asia/Taipei")).date().isoformat()
+    t = load(os.path.join(DATA, "tw.json")) or {}
+    report = load(os.path.join(OUT, "report.md")) or ""
+    verify = load(os.path.join(OUT, "verify.md")) or ""
+    images = load(os.path.join(OUT, "images.json")) or []
+    checks = []
+
+    def add(name, ok, detail, required=True):
+        checks.append({"name": name, "ok": bool(ok), "required": required, "detail": detail})
+
+    add("台股資料為今天", t.get("date") == today and not t.get("holiday"), f"tw.json 資料日 {t.get('date')}，今天 {today}")
+    add("融資融券為今天", bool((t.get("margin") or {}).get("fin_lots")) and t.get("date") == today, "融資資料日期與今天一致" if t.get("date") == today else "融資資料不是今天的")
+    rows = [ln for ln in verify.splitlines() if ln.strip().startswith("|") and re.search(r"✅|✏️|⚠️", ln)]
+    add("交叉查核至少 20 項", len(rows) >= MIN_CHECKS, f"out/verify.md 有 {len(rows)} 項查核紀錄")
+    add("圖片已產生", len(images) >= 3 and all(os.path.exists(p) for p in images), f"{len(images)} 張")
+    missing = [k for k in ("overview", "options", "events", "institutional") if k not in t]
+    add("延伸資料齊全", not missing, f"缺少 {missing or '無'}", required=False)
+    add("台股資料無錯誤", not t.get("errors"), f"errors={list((t.get('errors') or {}).keys())}", required=False)
+    add("報告有資料查核小節", "資料查核" in report, "report.md 最後要有「資料查核」小節", required=False)
+    return _finish(checks)
+
+
+def _finish(checks):
+    now_et = dt.datetime.now(ET)
+    passed = all(c["ok"] for c in checks if c["required"])
+    result = {"passed": passed, "checked_at_et": now_et.strftime("%Y-%m-%d %H:%M"), "checks": checks}
+    os.makedirs(OUT, exist_ok=True)
+    with open(os.path.join(OUT, "preflight.json"), "w", encoding="utf-8") as f:
+        json.dump(result, f, ensure_ascii=False, indent=2)
+    return result
+
+
+def run(mode="brief"):
+    if mode == "tw":
+        return run_tw()
     now_et = dt.datetime.now(ET)
     m = load(os.path.join(DATA, "market.json")) or {}
     e = load(os.path.join(DATA, "earnings.json")) or {}
@@ -102,16 +138,12 @@ def run():
     add("台股籌碼無錯誤", not t.get("errors"), f"errors={list((t.get('errors') or {}).keys())}", required=False)
     add("報告有資料查核小節", "資料查核" in report, "report.md 最後要有「資料查核」小節", required=False)
 
-    passed = all(c["ok"] for c in checks if c["required"])
-    result = {"passed": passed, "checked_at_et": now_et.strftime("%Y-%m-%d %H:%M"), "checks": checks}
-    os.makedirs(OUT, exist_ok=True)
-    with open(os.path.join(OUT, "preflight.json"), "w", encoding="utf-8") as f:
-        json.dump(result, f, ensure_ascii=False, indent=2)
-    return result
+    return _finish(checks)
 
 
 def main():
-    r = run()
+    mode = "tw" if "--mode" in sys.argv and sys.argv[sys.argv.index("--mode") + 1] == "tw" else "brief"
+    r = run(mode)
     for c in r["checks"]:
         mark = "✅" if c["ok"] else ("❌" if c["required"] else "⚠️")
         print(f"{mark} {c['name']}：{c['detail']}")

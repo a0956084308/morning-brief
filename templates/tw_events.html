@@ -1,0 +1,99 @@
+{% extends "_base.html" %}
+{% from "_macros.html" import chg %}
+{% set op = t.options or {} %}
+{% set ev = t.events or {} %}
+{% set sb = t.sbl or {} %}
+{% block title %}期權與行事曆 {{ t.label }}{% endblock %}
+{% block head %}
+<style>
+  table.tight td, table.tight th { padding: 3px 5px; font-size: 16px; }
+  td.nm { white-space: nowrap; max-width: 170px; overflow: hidden; text-overflow: ellipsis; }
+  .code { font-family: "Roboto Mono", monospace; color: var(--muted); font-size: 13px; margin-right: 4px; }
+  .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .kv div { border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; }
+  .kv .t { font-size: 14px; color: var(--muted); font-weight: 700; }
+  .kv .v { font-size: 22px; }
+  .note { font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .news td { font-size: 15px; }
+  .tag { font-size: 12px; font-weight: 700; color: #fff; background: var(--hot); border-radius: 4px; padding: 0 5px; }
+  .pill { display: inline-block; font-size: 13px; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; margin: 2px 3px 2px 0; }
+</style>
+{% endblock %}
+{% macro lots(v) -%}{% if v is none or v is undefined %}—{% else %}<span class="num {{ v|cls }}">{{ "{:+,}".format(v) }}</span>{% endif %}{%- endmacro %}
+{% block body %}
+<div class="head">
+  <div class="badge"><b>期權</b><span>{{ t.date[5:].replace('-', '/') }}</span></div>
+  <div class="head-main">
+    <h1>{{ t.label }} 期權籌碼與行事曆</h1>
+    {% if c.options_notes %}<ul class="summary">{% for s in c.options_notes %}<li>{{ s }}</li>{% endfor %}</ul>{% endif %}
+  </div>
+</div>
+
+<div class="grid" style="grid-template-columns: 1fr 1fr 1fr;">
+  <div class="panel">
+    <h2>選擇權籌碼</h2>
+    <div class="body">
+      {% set pc = op.pc_ratio or {} %}{% set mo = (op.max_oi or {}).monthly or {} %}{% set wk = (op.max_oi or {}).weekly or {} %}
+      <div class="kv">
+        <div><div class="t">Put/Call 未平倉比</div><div class="v num">{{ pc.oi_ratio|fmt(2) }}%</div><div class="small muted">前日 {{ pc.oi_ratio_prev|fmt(2) }}%｜成交量比 {{ pc.vol_ratio|fmt(2) }}%</div></div>
+        <div><div class="t">月選擇權 {{ mo.contract }}</div><div class="small">壓力（買權最大未平倉）<b class="num">{{ "{:,}".format(mo.call_max_strike) if mo.call_max_strike else '—' }}</b></div><div class="small">支撐（賣權最大未平倉）<b class="num">{{ "{:,}".format(mo.put_max_strike) if mo.put_max_strike else '—' }}</b></div></div>
+        <div><div class="t">週選擇權 {{ wk.contract }}</div><div class="small">壓力 <b class="num">{{ "{:,}".format(wk.call_max_strike) if wk.call_max_strike else '—' }}</b>（{{ "{:,}".format(wk.call_max_oi) if wk.call_max_oi else '—' }} 口）</div><div class="small">支撐 <b class="num">{{ "{:,}".format(wk.put_max_strike) if wk.put_max_strike else '—' }}</b>（{{ "{:,}".format(wk.put_max_oi) if wk.put_max_oi else '—' }} 口）</div></div>
+        {% set lt = (op.large_traders or {}).all or {} %}{% set li = (op.large_traders or {}).institutional or {} %}
+        <div><div class="t">十大交易人台指期淨部位</div><div class="small">前五大 {{ lots(lt.top5_net) }} 口｜前十大 {{ lots(lt.top10_net) }} 口</div><div class="small">其中特定法人前十大 {{ lots(li.top10_net) }} 口</div></div>
+      </div>
+      <div class="note">P/C 比大於 100% 代表賣權未平倉多於買權。最大未平倉履約價常被視為市場認定的支撐與壓力。十大交易人為全部月份合計。</div>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>借券賣出前 10（張）</h2>
+    <div class="body"><table class="tight">
+      <tr><th>個股</th><th class="r">當日賣出</th><th class="r">餘額增減</th></tr>
+      {% for x in sb.top_sold or [] %}<tr><td class="nm"><span class="code">{{ x.code }}</span>{{ x.name }}</td><td class="r num">{{ "{:,}".format(x.sold_lots) }}</td><td class="r">{{ lots(x.chg_lots) }}</td></tr>{% endfor %}
+    </table><div class="note">借券賣出常被視為法人看空或避險的指標</div></div>
+  </div>
+  <div class="panel">
+    <h2>處置股與注意股</h2>
+    <div class="body">
+      <div class="t" style="font-weight:700">處置中（{{ (ev.punish or [])|length }} 檔）</div>
+      <table class="tight">{% for x in ev.punish or [] %}<tr><td class="nm"><span class="code">{{ x.code }}</span>{{ x.name }}</td><td class="small">{{ x.period }}</td><td class="small">{{ x.measure }}</td></tr>{% else %}<tr><td class="muted">無</td></tr>{% endfor %}</table>
+      <div class="t" style="font-weight:700;margin-top:8px">今日注意股（{{ (ev.notice or [])|length }} 檔）</div>
+      <div>{% for x in (ev.notice or [])[:24] %}<span class="pill"><span class="code">{{ x.code }}</span>{{ x.name }}</span>{% endfor %}</div>
+    </div>
+  </div>
+</div>
+
+<div class="grid" style="grid-template-columns: 1.3fr 1fr; margin-top:16px">
+  <div class="panel">
+    <h2>重大訊息（{{ ev.major_news_date[5:].replace('-','/') if ev.major_news_date }}，共 {{ ev.major_news_total }} 則）</h2>
+    <div class="body"><table class="tight news">
+      {% if c.news_picks %}
+        {% for n in c.news_picks %}<tr><td class="nm"><span class="code">{{ n.code }}</span>{{ n.name }}</td><td>{{ n.title }}{% if n.impact %}<div class="small muted">{{ n.impact }}</div>{% endif %}</td></tr>{% endfor %}
+      {% else %}
+        {% for n in (ev.major_news or [])[:12] %}<tr><td class="nm"><span class="code">{{ n.code }}</span>{{ n.name }}</td><td>{% if n.important %}<span class="tag">重點</span> {% endif %}{{ n.title }}</td></tr>{% endfor %}
+      {% endif %}
+    </table></div>
+  </div>
+  <div class="grid" style="align-content:start">
+    {% set rv = ev.revenue or {} %}
+    <div class="panel">
+      <h2>月營收（{{ rv.month[:3]|int + 1911 if rv.month else '' }}/{{ rv.month[3:] if rv.month }}，已公布 {{ rv.reported }} 家）</h2>
+      <div class="body"><table class="tight">
+        <tr><th>權值股</th><th class="r">營收（億）</th><th class="r">年增</th><th class="r">累計年增</th></tr>
+        {% for x in rv.leaders or [] %}<tr><td class="nm"><span class="code">{{ x.code }}</span>{{ x.name }}</td><td class="r num">{{ x.revenue_e8|fmt(1) }}</td><td class="r">{{ chg(x.yoy) }}</td><td class="r">{{ chg(x.ytd_yoy) }}</td></tr>{% endfor %}
+        <tr><th>大型股年增前 5</th><th></th><th></th><th></th></tr>
+        {% for x in (rv.big_yoy_top or [])[:5] %}<tr><td class="nm"><span class="code">{{ x.code }}</span>{{ x.name }}</td><td class="r num">{{ x.revenue_e8|fmt(1) }}</td><td class="r">{{ chg(x.yoy) }}</td><td class="r">{{ chg(x.ytd_yoy) }}</td></tr>{% endfor %}
+      </table><div class="note">大型股＝月營收 50 億元以上的上市公司；每月 10 日前陸續公布新月份</div></div>
+    </div>
+    <div class="panel">
+      <h2>行事曆（法說會、除權息、重要事件）</h2>
+      <div class="body"><table class="tight">
+        {% for x in c.calendar or [] %}<tr><td style="white-space:nowrap">{{ x.date }}</td><td class="{{ 'hot' if x.hot }}">{{ x.event }}</td><td class="small muted">{{ x.focus }}</td></tr>{% endfor %}
+        {% for x in (ev.ex_dividend or [])[:8] %}<tr><td style="white-space:nowrap">{{ x.date[5:].replace('-','/') }}</td><td><span class="code">{{ x.code }}</span>{{ x.name }} 除{{ x.type }}</td><td class="small muted">{% if x.cash %}現金 {{ "%.2f"|format(x.cash) }} 元{% endif %}</td></tr>{% endfor %}
+      </table></div>
+    </div>
+  </div>
+</div>
+{% if c.tomorrow %}
+<div class="panel" style="margin-top:16px"><h2>明日觀察重點</h2><div class="body"><ol class="items">{% for x in c.tomorrow %}<li><span>{{ x }}</span></li>{% endfor %}</ol></div></div>
+{% endif %}
+{% endblock %}

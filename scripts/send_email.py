@@ -41,6 +41,8 @@ PAGE_NAMES = {
     "earnings": "SP500財報時間表",
     "week_review": "本週市場結論",
     "week_outlook": "下週前瞻",
+    "tw_market": "台股盤勢",
+    "tw_events": "期權與行事曆",
 }
 
 
@@ -94,12 +96,13 @@ def main():
     ap.add_argument("--images", default=os.path.join(OUT, "images.json"), help="render.py 輸出的圖片清單")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--allow-warnings", action="store_true", help="品質檢查未通過仍寄出（信件最上方會列出未通過項目）")
+    ap.add_argument("--mode", choices=["brief", "tw"], default="brief", help="brief＝早上國際晨報，tw＝21:30 台股日報")
     args = ap.parse_args()
 
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import preflight
 
-    pf = preflight.run()
+    pf = preflight.run(args.mode)
     failed = [c for c in pf["checks"] if c["required"] and not c["ok"]]
     for c in pf["checks"]:
         print(("✅" if c["ok"] else "❌" if c["required"] else "⚠️") + f" {c['name']}：{c['detail']}")
