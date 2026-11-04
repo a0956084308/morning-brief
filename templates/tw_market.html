@@ -37,7 +37,7 @@
       <div class="kpi"><div class="t">加權指數</div><div class="v num">{{ ix.close|fmt(2) }}</div><div class="s">{{ chg(ix.chg, ' 點') }} {{ chg(ix.chg_pct) }}</div></div>
       <div class="kpi"><div class="t">櫃買指數</div><div class="v num">{{ tp.close|fmt(2) }}</div><div class="s">{{ chg(tp.chg, ' 點') }} {{ chg(tp.chg_pct) }}</div></div>
       <div class="kpi"><div class="t">上市成交金額</div><div class="v num">{{ "{:,}".format(ix.turnover_e8 or 0) }}</div><div class="s">億元</div></div>
-      <div class="kpi"><div class="t">上漲／下跌家數</div><div class="v num"><span class="up">{{ b.up }}</span>／<span class="down">{{ b.down }}</span></div><div class="s">漲停 {{ b.limit_up }}｜跌停 {{ b.limit_down }}</div></div>
+      <div class="kpi"><div class="t">上市股票 上漲／下跌家數</div><div class="v num"><span class="up">{{ b.up }}</span>／<span class="down">{{ b.down }}</span></div><div class="s">漲停 {{ b.limit_up }}｜跌停 {{ b.limit_down }}</div></div>
       {% set twd = fx.get('TWD=X') or {} %}
       <div class="kpi"><div class="t">新台幣（美元/台幣）</div><div class="v num">{{ twd.last|fmt(3) }}</div>
         <div class="s">{% if twd.chg_pct is not none and twd.chg_pct is defined %}{% if twd.chg_pct > 0 %}<span class="down">貶 {{ "%.2f"|format(twd.chg_pct) }}%</span>{% elif twd.chg_pct < 0 %}<span class="up">升 {{ "%.2f"|format(-twd.chg_pct) }}%</span>{% else %}持平{% endif %}{% endif %}</div></div>
