@@ -407,7 +407,9 @@ def main():
     args = ap.parse_args()
 
     if args.require_today:
-        today = dt.datetime.now(TW).date()
+        now = dt.datetime.now(TW)
+        # 15:00 前（例如半夜手動重跑）把「今天的報告」視為前一天
+        today = now.date() if now.hour >= 15 else now.date() - dt.timedelta(days=1)
         if not twse("fund/BFI82U", type="day", dayDate=today.strftime("%Y%m%d")):
             os.makedirs(os.path.dirname(args.out), exist_ok=True)
             with open(args.out, "w", encoding="utf-8") as f:
@@ -482,8 +484,7 @@ def main():
         # 夜盤是否為「最近交易日（籌碼資料日）晚上」的那一場
         result["tx_night"]["is_last_night"] = result["tx_night"].get("night_evening") == d.strftime("%Y/%m/%d")
     step("maintenance", lambda: maintenance_risk(hist, last_close))
-    step("etf_00981A", lambda: etf_diff("00981A", "主動統一台股增長", etf_00981a(), names))
-    step("etf_00992A", lambda: etf_diff("00992A", "主動群益科技創新", etf_00992a(), names))
+    # 主動式 ETF 持股變化已移到 scripts/etf_holdings.py（台股日報另外產生 ETF 共識與明細圖）
 
     if args.full:
         import tw_extra

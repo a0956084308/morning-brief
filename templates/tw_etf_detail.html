@@ -1,0 +1,68 @@
+{% extends "_base.html" %}
+{% set ok = (f.etfs or [])|selectattr('changes', 'defined')|list %}
+{% block title %}ETF 持股明細 {{ f.date }}{% endblock %}
+{% block head %}
+<style>
+  table.tight td, table.tight th { padding: 3px 5px; font-size: 15px; }
+  td.nm { white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+  .code { font-family: "Roboto Mono", monospace; color: var(--muted); font-size: 13px; margin-right: 4px; }
+  table.trend td.v { font-family: "Roboto Mono", monospace; font-size: 14px; text-align: center; border-radius: 4px; }
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
+  .card h3 { font-size: 18px; background: var(--bar); color: #fff; padding: 6px 10px; }
+  .card h3 small { font-weight: 400; opacity: .8; font-size: 13px; }
+  .card .meta { font-size: 13px; color: var(--muted); padding: 4px 10px 0; }
+  .pill { display: inline-block; font-size: 12px; font-weight: 700; padding: 0 5px; border-radius: 4px; color: #fff; }
+  .pill.add { background: var(--up); } .pill.cut { background: var(--down); } .pill.new { background: #c2185b; } .pill.out { background: #455a64; }
+  tr.big td { background: #fff4e5; font-weight: 700; }
+  .more { font-size: 13px; color: var(--muted); padding: 2px 10px 8px; }
+</style>
+{% endblock %}
+{% macro lots(v) -%}{% if v is none or v is undefined %}—{% else %}<span class="num {{ v|cls }}">{{ "{:+,}".format(v) }}</span>{% endif %}{%- endmacro %}
+{% macro pill(s) -%}<span class="pill {{ {'加碼':'add','減碼':'cut','新增':'new','出清':'out'}[s] }}">{{ s }}</span>{%- endmacro %}
+{% block body %}
+<div class="head">
+  <div class="badge"><b>明細</b><span>{{ f.date[5:].replace('-', '/') }}</span></div>
+  <div class="head-main">
+    <h1>{{ f.date }} ETF 持股趨勢與明細</h1>
+    <div class="small muted" style="margin-top:6px">完整持股與每日增減請看信件附件 Excel｜橘底＝增減 100 張以上</div>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>近 {{ f.dates|length }} 個交易日：主動式 ETF 合計增減（張）</h2>
+  <div class="body">
+    {% set ns = namespace(mx=1) %}{% for x in f.trend or [] %}{% for v in x.seq %}{% if v|abs > ns.mx %}{% set ns.mx = v|abs %}{% endif %}{% endfor %}{% endfor %}
+    <table class="tight trend">
+      <tr><th>個股</th>{% for d in f.dates %}<th style="text-align:center">{{ d[5:].replace('-', '/') }}</th>{% endfor %}<th class="r">合計</th><th class="r">連續</th></tr>
+      {% for x in f.trend or [] %}
+      <tr><td class="nm"><span class="code">{{ x.code }}</span>{{ x.name }}</td>
+        {% for v in x.seq %}{% set a = [0.15 + 0.85 * ((v|abs) / ns.mx), 1]|min %}
+          {% if v == 0 %}<td class="v" style="background:#f3f5f8;color:#b3bcc7">·</td>
+          {% else %}<td class="v" style="background:{{ 'rgba(214,40,40,%.2f)'|format(a) if v > 0 else 'rgba(17,132,91,%.2f)'|format(a) }};color:{{ '#fff' if a > 0.55 else '#1b2430' }}">{{ "{:+,}".format(v) }}</td>{% endif %}
+        {% endfor %}
+        <td class="r">{{ lots(x.total) }}</td>
+        <td class="r">{% if x.streak > 0 %}<b class="up">連 {{ x.streak }} 加</b>{% elif x.streak < 0 %}<b class="down">連 {{ -x.streak }} 減</b>{% endif %}</td></tr>
+      {% endfor %}
+    </table>
+    <div class="note small muted">依「連續加碼或減碼天數」排序，只計算主動式 ETF（被動式多為申購贖回）</div>
+  </div>
+</div>
+
+<div class="cards">
+  {% for e in f.etfs or [] %}
+  <div class="panel card">
+    <h3>{{ e.code }} {{ e.name }} <small>{{ e.issuer }}｜{{ e.kind }}</small></h3>
+    {% if e.error %}<div class="meta warn">{{ e.error }}</div>
+    {% else %}
+    <div class="meta">{{ e.prev_date[5:].replace('-','/') }} → {{ f.date[5:].replace('-','/') }}｜持股 {{ e.holdings_count }} 檔｜變動 {{ e.changes|length }} 檔</div>
+    {% set limit = 10 if e.kind == '主動' else 5 %}
+    <div class="body" style="padding-top:4px"><table class="tight">
+      {% for x in e.changes[:limit] %}<tr class="{{ 'big' if x.big }}"><td class="nm"><span class="code">{{ x.code }}</span>{{ x.name }}</td><td>{{ pill(x.status) }}</td><td class="r">{{ lots(x.chg) }}</td></tr>
+      {% else %}<tr><td class="muted">今日持股無變動</td></tr>{% endfor %}
+    </table></div>
+    {% if e.changes|length > limit %}<div class="more">…另有 {{ e.changes|length - limit }} 檔小幅變動（見 Excel）</div>{% endif %}
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

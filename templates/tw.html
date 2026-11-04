@@ -122,30 +122,5 @@
   </div>
 </div>
 
-<div class="grid" style="grid-template-columns: 1fr 1fr; margin-top:16px">
-  {% for key, title in [('etf_00981A', '00981A 主動統一台股增長'), ('etf_00992A', '00992A 主動群益科技創新')] %}{% set e = t.get(key) or {} %}
-  <div class="panel">
-    <h2>{{ title }}　持股變化</h2>
-    <div class="body">
-      {% if e.error or not e.date %}<div class="warn">持股資料抓取失敗：{{ e.error or (t.errors or {}).get(key, '未知原因') }}</div>{% else %}
-      <div class="etf-sum"><span>比對 <b>{{ e.date_prev[5:].replace('-','/') }} → {{ e.date[5:].replace('-','/') }}</b></span><span>持股 <b>{{ e.holdings }}</b> 檔</span><span>變動 <b>{{ e.changes|length }}</b> 檔</span><span>增減 ≥100 張 <b class="hot">{{ e.big|length }}</b> 檔</span></div>
-      {% if e.big %}
-      <div class="bigbox"><div class="h">★ 增減 100 張以上</div>
-        <table class="tight">
-          {% for x in e.big %}<tr><td class="nm"><span class="code">{{ x.code }}</span>{{ x.name }}</td><td>{{ pill(x.status) }}</td><td class="r">{{ lots(x.chg_lots) }} 張</td><td class="r small muted">{{ "{:,}".format(x.lots_before) }} → {{ "{:,}".format(x.lots_after) }}</td></tr>{% endfor %}
-        </table>
-      </div>
-      {% endif %}
-      {% set small = e.changes|rejectattr('big')|list %}
-      {% if small %}
-      <table class="tight">
-        <tr><th>其他變動</th><th></th><th class="r">增減</th><th class="r">持有張數</th></tr>
-        {% for x in small %}<tr><td class="nm"><span class="code">{{ x.code }}</span>{{ x.name }}</td><td>{{ pill(x.status) }}</td><td class="r">{{ lots(x.chg_lots) }}</td><td class="r small muted">{{ "{:,}".format(x.lots_after) }}</td></tr>{% endfor %}
-      </table>
-      {% elif not e.big %}<div class="muted">本日持股無變動</div>{% endif %}
-      {% endif %}
-    </div>
-  </div>
-  {% endfor %}
-</div>
+<div class="small muted" style="margin-top:10px">主動式 ETF 持股變化已獨立成「ETF 持股共識」與「ETF 持股趨勢與明細」兩張圖（21:30 台股日報）。</div>
 {% endblock %}

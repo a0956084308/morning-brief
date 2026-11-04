@@ -13,6 +13,7 @@ python -m playwright install --with-deps chromium || python -m playwright instal
 
 ```bash
 python scripts/fetch_tw.py --full --require-today > /tmp/tw.log 2>&1 &
+python scripts/etf_holdings.py > /tmp/etf.log 2>&1 &     # ETF 每日持股變化（約 2 分鐘），同時產生 Excel
 ```
 
 - 會先確認今天是否為交易日。**exit code 3（或 tw.json 有 `"holiday": true`）代表今天休市：不寫報告、不寄信，直接回覆「今天休市，不產生台股日報」並結束。**
@@ -26,6 +27,13 @@ python scripts/fetch_tw.py --full --require-today > /tmp/tw.log 2>&1 &
 - `options`：P/C 比、最大未平倉履約價、十大交易人；`sbl`：借券賣出
 - `events`：重大訊息、月營收、處置股、注意股、除權息
 - `asia_fx`：日韓陸港股與匯率（`TWD=X` 漲代表新台幣**貶值**）
+
+`data/etf.json`（ETF 持股，來自各投信官網）：
+- 追蹤名單：上個月成交量前 30 名裡的主動式台股 ETF（每月自動更新）＋ 5 檔大型被動式（0050、006208、00878、0056、00919）
+- `consensus_buy`／`consensus_sell`：主動式共同加碼／減碼榜；`heatmap`：熱力圖；`trend`：近 5 日合計增減與連續天數
+- `etfs[].changes`：每檔 ETF 的增減（張），`big` 為 100 張以上
+- 有 `error` 的 ETF 代表該投信尚未支援或抓取失敗，報告要寫明
+- 被動式的增減多半是申購贖回，**不要解讀成看好或看壞**
 
 ## 3. 查新聞（至少 10 次搜尋或讀取）
 
@@ -43,6 +51,7 @@ python scripts/fetch_tw.py --full --require-today > /tmp/tw.log 2>&1 &
 **格式照 `samples/tw_content.json`**（範例內容都是假的，不能照抄）。每條 45 字內：
 - `mood`、`headline`（一句話總結今天台股）
 - `market_notes`（2 條，大盤與類股）、`tw_notes`（2 條，籌碼）、`options_notes`（2 條，期權）
+- `etf_notes`（2 條，主動式 ETF 的共識動向，例如多檔共同加碼哪些股票、哪些股票連續被減碼）
 - `news_picks`：從重大訊息挑 6～10 則最重要的，`impact` 寫可能影響
 - `calendar`：未來一週法說會、重要事件（`hot: true` 標重點）
 - `tomorrow`：明日觀察重點 3～4 條
@@ -56,7 +65,7 @@ python scripts/fetch_tw.py --full --require-today > /tmp/tw.log 2>&1 &
 ### 三、三大法人與外資動向（買賣超金額、外資買超／賣超前 5、投信動向）
 ### 四、期貨與選擇權（外資台指期未平倉、十大交易人、P/C 比、支撐壓力）
 ### 五、融資融券與借券（融資增減、維持率破 130% 風險股〔估算〕、借券賣出前 5）
-### 六、主動式 ETF 持股變化（00981A、00992A，增減 100 張以上列出）
+### 六、主動式 ETF 持股變化（共同加碼／減碼前 5、連續加碼或減碼的股票、各檔增減 100 張以上；註明未取得的 ETF；完整資料在附件 Excel）
 ### 七、重大訊息與月營收
 ### 八、處置股、注意股、除權息
 ### 九、亞股與匯率
@@ -68,7 +77,7 @@ python scripts/fetch_tw.py --full --require-today > /tmp/tw.log 2>&1 &
 ## 6. 寄信前交叉查核（必做，至少 20 項）
 
 挑至少 20 項關鍵數字，用**不同的可信來源**比對（例如 tw.json 的證交所數字，用鉅亨網、經濟日報、Yahoo 股市或期交所網站確認）：
-加權與櫃買指數收盤、成交金額、三大法人各自買賣超、外資買超前 3、外資賣超前 3、外資台指期未平倉、融資餘額增減、P/C 比、台積電收盤、新台幣收盤、ETF 大幅增減的個股、重大訊息內容。
+加權與櫃買指數收盤、成交金額、三大法人各自買賣超、外資買超前 3、外資賣超前 3、外資台指期未平倉、融資餘額增減、P/C 比、台積電收盤、新台幣收盤、重大訊息內容；ETF 持股至少抽查 2 檔（例如到投信官網或 CMoney、玩股網的持股異動頁，確認共同加碼榜前幾名的張數）。
 
 - 允許誤差：指數與價格 0.05% 內、金額 0.1 億內。超過就追查，以官方數字為準修正。
 - 互相矛盾且找不到第三來源時，標「未確認」。
@@ -83,7 +92,7 @@ python scripts/preflight.py --mode tw
 python scripts/send_email.py --mode tw --subject "台股日報 MM/DD（週X）｜一句話總結"
 ```
 
-- 用 Read 打開 `out/` 的 3 張 PNG 檢查：文字截斷、空白區塊、方框字。有問題就縮短文字重新產生。
+- 用 Read 打開 `out/` 的 5 張 PNG（盤勢、籌碼、ETF 共識、ETF 明細、期權與行事曆）檢查：文字截斷、空白區塊、方框字。有問題就縮短文字重新產生。
 - preflight 沒通過就修正後重來。只有在台灣時間 21:50 之後仍無法修正，才加 `--allow-warnings` 寄出。
 - 寄信走 Resend（`RESEND_API_KEY`），不要改用 SMTP。
 

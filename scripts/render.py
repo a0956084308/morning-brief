@@ -79,6 +79,7 @@ def main():
     e = load("earnings.json", required=not tw_mode)
     c = load("tw_content.json" if tw_mode else "content.json")
     t = load("tw.json", required=tw_mode)
+    f = load("etf.json", required=False)
     if tw_mode:  # 台股日報的產生時間以台股資料為準
         m = {**(m or {}), "generated_at_utc": t.get("generated_at_utc", "")}
 
@@ -87,7 +88,11 @@ def main():
     env.filters["cls"] = cls
 
     if tw_mode:
-        pages = [("1_tw_market", "tw_market.html"), ("2_tw", "tw.html"), ("3_tw_events", "tw_events.html")]
+        pages = [("1_tw_market", "tw_market.html"), ("2_tw", "tw.html"), ("3_tw_etf", "tw_etf.html"),
+                 ("4_tw_etf_detail", "tw_etf_detail.html"), ("5_tw_events", "tw_events.html")]
+        if not f:
+            pages = [p for p in pages if not p[1].startswith("tw_etf")]
+            print("[warn] 沒有 data/etf.json，略過 ETF 持股圖", file=sys.stderr)
         week_label = ""
     elif args.mode == "daily":
         pages = [("1_daily", "daily.html"), ("2_tw", "tw.html"), ("3_earnings", "earnings.html")]
@@ -99,7 +104,7 @@ def main():
         pages = [p for p in pages if p[1] != "tw.html"]
         print("[warn] 沒有 data/tw.json，略過台股籌碼圖", file=sys.stderr)
 
-    ctx = {"m": m, "e": e, "c": c, "t": t, "week_label": week_label, "chart": chart_data(m)}
+    ctx = {"m": m, "e": e, "c": c, "t": t, "f": f, "week_label": week_label, "chart": chart_data(m)}
     os.makedirs(OUT, exist_ok=True)
     outputs = []
     with sync_playwright() as p:

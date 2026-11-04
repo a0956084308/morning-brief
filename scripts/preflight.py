@@ -44,7 +44,8 @@ def last_us_close(now_et):
 
 def run_tw():
     """台股日報（21:30）的檢查：資料要是今天的、融資已公布、查核滿 20 項。"""
-    today = dt.datetime.now(ZoneInfo("Asia/Taipei")).date().isoformat()
+    now = dt.datetime.now(ZoneInfo("Asia/Taipei"))
+    today = (now.date() if now.hour >= 15 else now.date() - dt.timedelta(days=1)).isoformat()
     t = load(os.path.join(DATA, "tw.json")) or {}
     report = load(os.path.join(OUT, "report.md")) or ""
     verify = load(os.path.join(OUT, "verify.md")) or ""
@@ -59,6 +60,10 @@ def run_tw():
     rows = [ln for ln in verify.splitlines() if ln.strip().startswith("|") and re.search(r"✅|✏️|⚠️", ln)]
     add("交叉查核至少 20 項", len(rows) >= MIN_CHECKS, f"out/verify.md 有 {len(rows)} 項查核紀錄")
     add("圖片已產生", len(images) >= 3 and all(os.path.exists(p) for p in images), f"{len(images)} 張")
+    etf = load(os.path.join(DATA, "etf.json")) or {}
+    etf_ok = [x for x in etf.get("etfs", []) if "changes" in x]
+    add("ETF 持股為今天", etf.get("date") == today and len(etf_ok) >= 5,
+        f"etf.json 資料日 {etf.get('date')}，成功 {len(etf_ok)} 檔", required=False)
     missing = [k for k in ("overview", "options", "events", "institutional") if k not in t]
     add("延伸資料齊全", not missing, f"缺少 {missing or '無'}", required=False)
     add("台股資料無錯誤", not t.get("errors"), f"errors={list((t.get('errors') or {}).keys())}", required=False)

@@ -1,0 +1,92 @@
+{% extends "_base.html" %}
+{% set ok = (f.etfs or [])|selectattr('changes', 'defined')|list %}
+{% set act = ok|selectattr('kind', 'equalto', '主動')|list %}
+{% set pas = ok|selectattr('kind', 'equalto', '被動')|list %}
+{% block title %}ETF 持股共識 {{ f.date }}{% endblock %}
+{% block head %}
+<style>
+  table.tight td, table.tight th { padding: 3px 5px; font-size: 16px; }
+  td.nm { white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+  .code { font-family: "Roboto Mono", monospace; color: var(--muted); font-size: 13px; margin-right: 4px; }
+  .dots { letter-spacing: 1px; font-size: 14px; }
+  .dots .b { color: var(--up); } .dots .s { color: var(--down); }
+  table.heat { border-collapse: separate; border-spacing: 2px; }
+  table.heat th { font-size: 13px; text-align: center; padding: 3px 2px; white-space: nowrap; color: var(--ink); }
+  table.heat th.pas { color: var(--muted); }
+  table.heat td { font-family: "Roboto Mono", monospace; font-size: 13px; text-align: center; padding: 4px 2px; border-radius: 4px; border: none; min-width: 58px; }
+  table.heat td.nm { font-family: "Noto Sans TC", sans-serif; text-align: left; font-size: 15px; min-width: 120px; }
+  table.heat td.sep, table.heat th.sep { min-width: 8px; padding: 0; background: none; }
+  table.heat td.tot { font-weight: 700; }
+  .legend { display: flex; gap: 12px; font-size: 14px; color: var(--muted); align-items: center; flex-wrap: wrap; margin-top: 6px; }
+  .legend i { display: inline-block; width: 30px; height: 14px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
+  .note { font-size: 13px; color: var(--muted); margin-top: 6px; }
+</style>
+{% endblock %}
+{% macro lots(v) -%}{% if v is none or v is undefined %}—{% else %}<span class="num {{ v|cls }}">{{ "{:+,}".format(v) }}</span>{% endif %}{%- endmacro %}
+{% macro cell(v, mx) -%}
+{%- if v is none or v is undefined or v == 0 -%}<td style="background:#f3f5f8;color:#b3bcc7">·</td>
+{%- else -%}{%- set a = [0.15 + 0.85 * ((v|abs) / (mx or 1)), 1]|min -%}
+<td style="background:{{ 'rgba(214,40,40,%.2f)'|format(a) if v > 0 else 'rgba(17,132,91,%.2f)'|format(a) }};color:{{ '#fff' if a > 0.55 else '#1b2430' }}">{{ "{:+,}".format(v) }}</td>
+{%- endif -%}
+{%- endmacro %}
+{% block body %}
+<div class="head">
+  <div class="badge"><b>ETF</b><span>{{ f.date[5:].replace('-', '/') }}</span></div>
+  <div class="head-main">
+    <h1>{{ f.date }} 主動式 ETF 持股共識</h1>
+    {% if c.etf_notes %}<ul class="summary">{% for s in c.etf_notes %}<li>{{ s }}</li>{% endfor %}</ul>{% endif %}
+    <div class="small muted" style="margin-top:6px">追蹤 {{ act|length }} 檔主動式（{{ f.month_from[:7] if f.month_from }} 月成交量前 30 名）＋ {{ pas|length }} 檔大型被動式｜單位：張（1 張＝1,000 股）｜資料：各投信官網公告持股</div>
+  </div>
+</div>
+
+<div class="grid" style="grid-template-columns: 1fr 1fr;">
+  <div class="panel">
+    <h2>主動式共同加碼榜</h2>
+    <div class="body"><table class="tight">
+      <tr><th>個股</th><th>加碼檔數</th><th class="r">合計張數</th></tr>
+      {% for x in f.consensus_buy or [] %}<tr><td class="nm"><span class="code">{{ x.code }}</span>{{ x.name }}</td>
+        <td class="dots">{% for i in range(x.buy) %}<span class="b">●</span>{% endfor %}{% for i in range(x.sell) %}<span class="s">●</span>{% endfor %} <span class="small muted">{{ x.buy }} 加{% if x.sell %}／{{ x.sell }} 減{% endif %}</span></td>
+        <td class="r">{{ lots(x.net) }}</td></tr>{% else %}<tr><td class="muted">今日無加碼</td></tr>{% endfor %}
+    </table></div>
+  </div>
+  <div class="panel">
+    <h2>主動式共同減碼榜</h2>
+    <div class="body"><table class="tight">
+      <tr><th>個股</th><th>減碼檔數</th><th class="r">合計張數</th></tr>
+      {% for x in f.consensus_sell or [] %}<tr><td class="nm"><span class="code">{{ x.code }}</span>{{ x.name }}</td>
+        <td class="dots">{% for i in range(x.sell) %}<span class="s">●</span>{% endfor %}{% for i in range(x.buy) %}<span class="b">●</span>{% endfor %} <span class="small muted">{{ x.sell }} 減{% if x.buy %}／{{ x.buy }} 加{% endif %}</span></td>
+        <td class="r">{{ lots(x.net) }}</td></tr>{% else %}<tr><td class="muted">今日無減碼</td></tr>{% endfor %}
+    </table></div>
+  </div>
+</div>
+
+<div class="panel" style="margin-top:16px">
+  <h2>持股增減熱力圖（張）</h2>
+  <div class="body">
+    {% set ns = namespace(mx=1, pmx=1) %}
+    {% for x in f.heatmap or [] %}{% for e in act %}{% set v = x.by.get(e.code) %}{% if v and v|abs > ns.mx %}{% set ns.mx = v|abs %}{% endif %}{% endfor %}
+      {% for e in pas %}{% set v = x.by.get(e.code) %}{% if v and v|abs > ns.pmx %}{% set ns.pmx = v|abs %}{% endif %}{% endfor %}{% endfor %}
+    <table class="heat">
+      <tr><th style="text-align:left">個股</th>
+        {% for e in act %}<th>{{ e.code }}<div class="small muted" style="font-weight:400">{{ e.issuer }}</div></th>{% endfor %}
+        <th class="r">主動合計</th>
+        {% if pas %}<th class="sep"></th>{% for e in pas %}<th class="pas">{{ e.code }}<div class="small" style="font-weight:400">被動</div></th>{% endfor %}{% endif %}
+      </tr>
+      {% for x in f.heatmap or [] %}
+      <tr><td class="nm"><span class="code">{{ x.code }}</span>{{ x.name }}</td>
+        {% for e in act %}{{ cell(x.by.get(e.code), ns.mx) }}{% endfor %}
+        <td class="tot">{{ lots(x.net) }}</td>
+        {% if pas %}<td class="sep"></td>{% for e in pas %}{{ cell(x.by.get(e.code), ns.pmx) }}{% endfor %}{% endif %}
+      </tr>
+      {% endfor %}
+    </table>
+    <div class="legend"><span><i style="background:rgba(214,40,40,.8)"></i>加碼</span><span><i style="background:rgba(17,132,91,.8)"></i>減碼</span><span>顏色越深＝張數越多</span><span>· ＝ 無變動</span>
+      <span>主動式與被動式分開計算深淺（被動式多為申購贖回造成，張數通常較大）</span></div>
+    {% set failed = (f.etfs or [])|selectattr('error', 'defined')|list %}
+    {% if failed or f.overseas_excluded %}<div class="note">
+      {% if failed %}未取得：{% for e in failed %}{{ e.code }} {{ e.name }}（{{ e.error }}）{% if not loop.last %}、{% endif %}{% endfor %}。{% endif %}
+      {% if f.overseas_excluded %}主要持有海外股票、未列入：{% for e in f.overseas_excluded %}{{ e.code }} {{ e.name }}{% if not loop.last %}、{% endif %}{% endfor %}。{% endif %}
+    </div>{% endif %}
+  </div>
+</div>
+{% endblock %}

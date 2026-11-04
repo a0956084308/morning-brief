@@ -43,6 +43,8 @@ PAGE_NAMES = {
     "week_outlook": "下週前瞻",
     "tw_market": "台股盤勢",
     "tw_events": "期權與行事曆",
+    "tw_etf": "ETF持股共識",
+    "tw_etf_detail": "ETF持股趨勢與明細",
 }
 
 
@@ -57,7 +59,16 @@ def attachment_name(path):
     return f"{today}_{idx}_{PAGE_NAMES.get(key, key)}.png"
 
 
-def send_resend(subject, html, text, images):
+def load_files():
+    """render 以外的附件（例如 ETF 持股 Excel），清單在 out/attachments.json。"""
+    path = os.path.join(OUT, "attachments.json")
+    if not os.path.exists(path):
+        return []
+    with open(path, encoding="utf-8") as f:
+        return [p for p in json.load(f) if os.path.exists(p)]
+
+
+def send_resend(subject, html, text, images, files=()):
     """透過 Resend HTTPS API 寄信（雲端環境擋 SMTP 時使用）。
 
     免費方案沒有自己的網域時，寄件者固定用 onboarding@resend.dev，
@@ -78,6 +89,10 @@ def send_resend(subject, html, text, images):
         attachments.append({"filename": f"inline_{name}", "content": b64, "content_type": "image/png", "content_id": f"img{i}"})
         # 一般附件：可以點開放大、下載
         attachments.append({"filename": name, "content": b64, "content_type": "image/png"})
+    for p in files:
+        with open(p, "rb") as f:
+            attachments.append({"filename": os.path.basename(p), "content": base64.b64encode(f.read()).decode(),
+                                "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})
     r = requests.post(
         "https://api.resend.com/emails",
         headers={"Authorization": f"Bearer {os.environ['RESEND_API_KEY']}", "Content-Type": "application/json"},
@@ -119,7 +134,10 @@ def main():
 
     img_tags = "".join(f'<img class="brief" src="cid:img{i}" alt="晨報圖片 {i + 1}">' for i in range(len(images)))
     if images:
-        img_tags = "<p class='note' style='margin-top:0'>💡 想放大或下載圖片，請點信件最下方的附件。</p>" + img_tags
+        tip = "💡 想放大或下載圖片，請點信件最下方的附件。"
+        if args.mode == "tw" and load_files():
+            tip += "ETF 完整持股與增減另附 Excel 檔。"
+        img_tags = f"<p class='note' style='margin-top:0'>{tip}</p>" + img_tags
     if failed:
         items = "".join(f"<li>{c['name']}：{c['detail']}</li>" for c in failed)
         img_tags = (
@@ -147,7 +165,7 @@ def main():
         return
 
     if os.environ.get("RESEND_API_KEY"):
-        send_resend(args.subject, html, report_md, images)
+        send_resend(args.subject, html, report_md, images, load_files() if args.mode == "tw" else [])
         return
 
     user = os.environ.get("GMAIL_USER")
