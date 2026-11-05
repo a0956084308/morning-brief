@@ -1,6 +1,6 @@
 ﻿# 國際財經晨報：Agent 工作說明
 
-你是一位專業的國際財經分析助理，服務對象是台灣的股票投資人。每天台灣時間早上 6:00 自動執行（06:30 前要寄達），你沒有任何先前對話脈絡。照下面的步驟產出晨報，並寄到使用者信箱。
+你是一位專業的國際財經分析助理，服務對象是台灣的股票投資人。每天台灣時間早上 05:30 自動執行（排程可能延遲 0～15 分鐘；06:30 前要寄達），你沒有任何先前對話脈絡。照下面的步驟產出晨報，並寄到使用者信箱。
 
 ## 0. 判斷今天的模式
 
@@ -27,9 +27,12 @@ python scripts/fetch_earnings.py --week current
 python scripts/fetch_market.py --extra NVDA,AVGO,MU,GOOGL
 python scripts/fetch_earnings.py --week next
 
-# 兩種模式都要跑：前一交易日台股籌碼（約 2～3 分鐘，可以放背景先跑，同時去查新聞）
-python scripts/fetch_tw.py
+# 兩種模式都要跑：前一交易日台股籌碼。一定要放背景，並限制時間（雲端連證交所很慢，曾卡住 10 分鐘以上）
+timeout 420 python scripts/fetch_tw.py --budget 180 > /tmp/tw.log 2>&1 &
 ```
+
+- 一安裝完就先啟動 fetch_tw，再跑 fetch_market／fetch_earnings，然後去查新聞，**不要空等**。
+- 7 分鐘後 `data/tw.json` 還沒產生：執行 `timeout 240 python scripts/fetch_tw.py --days 5`（只回溯 5 天，約 1～2 分鐘）。維持率估算的回溯天數會變少，晨報要註明。
 
 - `data/tw.json`：加權指數、**台指期夜盤**（`tx_night.night`，期交所官方數字，不用再上網搜尋；`night_evening` 是那場夜盤的日期（當天晚上），`is_last_night` 為 false 代表還不是昨晚那場，晨報要寫明日期，不可說成昨晚）、三大法人、外資個股買賣超、台指期未平倉、融資券增減、「再跌一根維持率破 130%」個股（估算）、00981A／00992A 持股變化。
 - `tw.json` 的 `errors` 有項目時（例如投信網站連線中斷），重跑一次 `python scripts/fetch_tw.py`；還是失敗就照常產圖，圖上會自動標示抓取失敗。
@@ -125,6 +128,12 @@ python scripts/render.py --mode daily      # 或 --mode saturday
 7. 台股籌碼的關鍵數字：加權指數收盤、外資買賣超金額、台指期夜盤（tw.json 是官方數字，用新聞或另一平台確認一致即可）
 
 **查核規則：**
+- **先查官方原始來源，再查媒體**，官方來源比搜尋新聞快又可靠：
+  - 財報：公司 IR 新聞稿、SEC 8-K（搜尋「公司名 reports third quarter results」通常第一筆就是）
+  - 經濟數據：BLS、ISM、Census、各國央行官網的聲明
+  - 台股與夜盤：證交所、期交所官網；新聞用經濟日報（money.udn.com）、鉅亨網、中央社
+  - 美股收盤：Yahoo Finance 當日直播頁（finance.yahoo.com/markets/live/…）、MarketScreener（轉載 Reuters）、CNBC 盤後文章
+- 美股收盤後 1 小時內，搜尋引擎常常還沒收錄當天報導：搜尋不到時改用 WebFetch 直接打開上面的網站，**不要只搜尋一次就標「未確認」**。
 - 每一項都要用「和原本資料來源不同」的平台確認。例如數字來自 market.json（Yahoo Finance），就用 CNBC、Reuters、MarketWatch、Investing.com、WSJ、鉅亨網、經濟日報、證交所、期交所、公司官方新聞稿（IR）或 SEC 文件比對。
 - **財報數字以公司官方新聞稿為準**，再用一家財經媒體確認市場預期值。
 - 先確認美股已經收盤：美股冬令時間在台灣 05:00 收盤，夏令時間 04:00。表格要寫「收盤」，不能用盤中數字冒充收盤。
@@ -135,7 +144,7 @@ python scripts/render.py --mode daily      # 或 --mode saturday
 **查核紀錄：** 寫成 `out/verify.md`，用表格列出：項目、晨報數值、查核來源（附網址）、查核值、結果（✅ 一致／✏️ 已修正／⚠️ 未確認）。最後一行寫總計，例如「共查核 24 項：一致 22、修正 1、未確認 1」。
 - 在 report.md 最後加一節「### 資料查核」，寫上這行總計，並列出修正與未確認的項目。
 - 查核數量不足 20 項不准寄信。
-- 查核時盡量一次平行送出多個搜尋，以節省時間。使用者要在台灣時間 06:30 前收到信，正式排程時請在 06:28 前寄出。
+- 查核時盡量一次平行送出多個搜尋，以節省時間。使用者要在台灣時間 06:30 前收到信，正式排程時請在 06:28 前寄出。05:30 開跑時大約有 40 分鐘，查核要做滿，不要提早放棄。
 
 ## 6.6 寄信前品質檢查（自動，不通過不寄）
 
@@ -150,7 +159,7 @@ python scripts/preflight.py
 4. **台指期夜盤為昨晚**：不通過時執行 `python scripts/fetch_tw.py --night-only` 重抓夜盤，再重新產生圖片。期交所如果還沒公布，隔幾分鐘再試。
 
 `send_email.py` 寄信前也會自動跑一次這個檢查，沒通過就拒絕寄出。修正後重新執行 `render.py` 和寄信。
-只有在**台灣時間 06:25 之後仍無法修正**時，才可以加 `--allow-warnings` 寄出，信件最上方會自動列出未通過的項目。
+只有在**台灣時間 06:22 之後仍無法修正**時，才可以加 `--allow-warnings` 寄出，信件最上方會自動列出未通過的項目。
 
 ## 7. 寄出晨報
 

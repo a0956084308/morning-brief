@@ -76,12 +76,17 @@ def twse(path, **params):
 
 
 # ---------- 信用交易（同時用來找交易日） ----------
-def margin_history(n_days):
-    """由今天往回找 n_days 個有融資資料的交易日，回傳 [(date, summary_table, {code: row})]，舊到新。"""
+def margin_history(n_days, budget=0):
+    """由今天往回找 n_days 個有融資資料的交易日，回傳 [(date, summary_table, {code: row})]，舊到新。
+    budget > 0 時：超過 budget 秒且已取得至少 5 天就停止（雲端連證交所很慢，避免晨報卡住）。"""
     out = []
     d = dt.datetime.now(TW).date()
     tries = 0
+    t0 = time.time()
     while len(out) < n_days and tries < n_days * 2 + 15:
+        if budget and len(out) >= 5 and time.time() - t0 > budget:
+            print(f"[warn] 融資歷史已用 {time.time() - t0:.0f} 秒，只取 {len(out)} 天就停止", file=sys.stderr)
+            break
         tries += 1
         if d.weekday() < 5:
             j = twse("marginTrading/MI_MARGN", date=d.strftime("%Y%m%d"), selectType="ALL")
@@ -399,6 +404,7 @@ def etf_diff(code, name, snaps, names):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=30, help="估算融資成本的回溯交易日數")
+    ap.add_argument("--budget", type=int, default=0, help="融資歷史最多花幾秒（取得 5 天以上後才會停止）；0 = 不限")
     ap.add_argument("--out", default=os.path.join(ROOT, "data", "tw.json"))
     ap.add_argument("--night-only", action="store_true", help="只重抓台指期夜盤，更新既有的 tw.json")
     ap.add_argument("--full", action="store_true", help="台股日報用：另外抓大盤類股、期權、借券、重大訊息、行事曆、亞股匯率")
@@ -447,7 +453,7 @@ def main():
             result["errors"][key] = f"{type(e).__name__}: {e}"
             print(f"[warn] {key} 失敗：{e}", file=sys.stderr)
 
-    hist = margin_history(args.days)
+    hist = margin_history(args.days, args.budget)
     if not hist:
         sys.exit("找不到任何交易日的融資資料")
     d = hist[-1][0]
